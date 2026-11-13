@@ -1,0 +1,8 @@
+{
+  "name": "Remix Habit Tracker Pro",
+  "description": "A comprehensive tool to track daily habits, manage routines, and achieve goals without missing a single detail.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

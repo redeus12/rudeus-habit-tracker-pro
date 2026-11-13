@@ -1,0 +1,38 @@
+# Gradle & Android Build Outputs
+*.iml
+.gradle/
+.kotlin/
+/build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Local Configuration & Secrets
+local.properties
+.env
+.env.*
+!.env.example
+
+# Keystores
+*.jks
+*.keystore
+debug.keystore
+
+# Android Studio / IntelliJ IDEA
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetDropDown.xml
+.idea/render.experimental.xml
+
+# Node / Web tooling (if any auxiliary scripts are used)
+node_modules/
+dist/
+
+# OS-specific files
+.DS_Store
+Thumbs.db

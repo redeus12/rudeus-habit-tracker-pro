@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_timer_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg_shape"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center_vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Active Timer State -->
+        <LinearLayout
+            android:id="@+id/widget_timer_active_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <!-- Habit and Time Info Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/widget_timer_habit_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Habit Name"
+                    android:textColor="@color/widget_text"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/widget_timer_elapsed_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="@color/widget_text"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:layout_marginLeft="8dp" />
+            </LinearLayout>
+
+            <!-- Current Music Track Info Row -->
+            <TextView
+                android:id="@+id/widget_timer_track_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="No music playing"
+                android:textColor="@color/widget_text_muted"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <!-- Timer Controls Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginTop="12dp">
+
+                <ImageButton
+                    android:id="@+id/widget_timer_btn_prev"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:src="@android:drawable/ic_media_previous"
+                    android:contentDescription="Previous track"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp" />
+
+                <ImageButton
+                    android:id="@+id/widget_timer_btn_play_pause"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:src="@android:drawable/ic_media_play"
+                    android:contentDescription="Play/Pause"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp"
+                    android:layout_marginLeft="16dp"
+                    android:layout_marginRight="16dp" />
+
+                <ImageButton
+                    android:id="@+id/widget_timer_btn_stop"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:src="@android:drawable/ic_menu_save"
+                    android:contentDescription="Stop and Save"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp" />
+
+                <ImageButton
+                    android:id="@+id/widget_timer_btn_next"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?android:attr/selectableItemBackground"
+                    android:src="@android:drawable/ic_media_next"
+                    android:contentDescription="Next track"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp"
+                    android:layout_marginLeft="16dp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Idle State -->
+        <LinearLayout
+            android:id="@+id/widget_timer_idle_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No timer running"
+                android:textColor="@color/widget_text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Tap to open the app and start"
+                android:textColor="@color/widget_text_muted"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp" />
+        </LinearLayout>
+
+    </FrameLayout>
+</LinearLayout>
