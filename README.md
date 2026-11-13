@@ -1,20 +1,43 @@
 <div align="center">
 
-<img src="app/src/main/res/drawable/img_logo_lockup_1783794024459.jpg" alt="Rudeus Habit Banner" width="720" />
-
-# Rudeus Habit — Remix Habit Tracker Pro
+# ⚡ Rudeus Habit — Remix Habit Tracker Pro
 
 **An offline-first, glassmorphic Android habit ledger, focus timer, and analytics suite built with Kotlin & Jetpack Compose.**
 
-[![Build & Release Android APK](https://img.shields.io/github/actions/workflow/status/redeus12/rudeus-habit-tracker-pro/release-apk.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Build%20APK)](../../actions/workflows/release-apk.yml)
-[![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024--36)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](../../releases/latest)
+[![Build & Release Android APK](https://img.shields.io/github/actions/workflow/status/redeus12/rudeus-habit-tracker-pro/release-apk.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=Build%20APK)](https://github.com/redeus12/rudeus-habit-tracker-pro/actions/workflows/release-apk.yml)
+[![Latest Release](https://img.shields.io/github/v/release/redeus12/rudeus-habit-tracker-pro?style=for-the-badge&logo=github&color=10B981&label=Release)](https://github.com/redeus12/rudeus-habit-tracker-pro/releases/latest)
+[![Platform](https://img.shields.io/badge/Platform-Android%207.0%2B%20(API%2024--36)-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/redeus12/rudeus-habit-tracker-pro/releases/latest)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![License: MIT](https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge)](LICENSE)
 
-[**Download Latest APK**](../../releases/latest) · [**Explore Features**](#-overview--key-features) · [**Architecture**](#-tech-stack--architecture) · [**Build from Source**](#-local-development--building-from-source)
+[**📥 Download Latest APK (`v1.0.0`)**](https://github.com/redeus12/rudeus-habit-tracker-pro/releases/download/v1.0.0/RudeusHabit-v1.0.0.apk) · [**📸 Screenshots**](#-screenshots) · [**✨ Features**](#-overview--key-features) · [**🏗️ Architecture**](#-tech-stack--architecture) · [**🛠️ Build from Source**](#-local-development--building-from-source)
+
+<br/>
+
+<p align="center">
+  <img src="screenshots/01-overview-discipline-field.jpg" width="23%" alt="Overview & 18-Week Discipline Field" />
+  <img src="screenshots/02-pomodoro-focus-timer.jpg" width="23%" alt="Pomodoro Focus Timer & Media Control" />
+  <img src="screenshots/04-all-habits-share-card.jpg" width="23%" alt="All Habits Progress Curves Share Card" />
+  <img src="screenshots/05-vivid-glass-wallpaper-engine.jpg" width="23%" alt="Vivid Glass & Dynamic Wallpaper Rotation" />
+</p>
 
 </div>
+
+---
+
+## 📸 Screenshots
+
+### Core Tracking, Focus Timer & Analytics
+
+| 18-Week Discipline Field | Pomodoro & Stopwatch Timer | Interactive Trend Curves | Exported Progress Share Card |
+| :---: | :---: | :---: | :---: |
+| <img src="screenshots/01-overview-discipline-field.jpg" width="200" alt="Overview & 18-Week Discipline Field" /><br/>**Overview & Heatmap**<br/>*18-week consistency grid, 30-day rate & weekly habit matrix* | <img src="screenshots/02-pomodoro-focus-timer.jpg" width="200" alt="Pomodoro Focus Timer" /><br/>**Focus & Stopwatch**<br/>*Pomodoro rounds, Stopwatch, Countdown & media flow* | <img src="screenshots/03-trends-consistency-curves.jpg" width="200" alt="Interactive Trend Curves" /><br/>**Trends & Inspection**<br/>*Tap any dot to inspect historical completion rates* | <img src="screenshots/04-all-habits-share-card.jpg" width="200" alt="All Habits Progress Share Card" /><br/>**Studio Share Card**<br/>*High-res summary card with all habit curves & streaks* |
+
+### Glassmorphic Wallpaper Engine, Daily Checklist & Offline Backup
+
+| Vivid Glass & Wallpaper Engine | Today Habits & Subtasks | Dynamic Glass Theme Adaptation | Offline JSON Backup & FX |
+| :---: | :---: | :---: | :---: |
+| <img src="screenshots/05-vivid-glass-wallpaper-engine.jpg" width="200" alt="Vivid Glass & Wallpaper Rotation" /><br/>**Vivid Glass Engine**<br/>*Up to 12 custom wallpapers, auto-rotation, blur & tint sliders* | <img src="screenshots/06-today-habits-expanded.jpg" width="200" alt="Today Habits Checklist" /><br/>**Today Checklist**<br/>*Category filters, streak counters, freeze shield & quick to-dos* | <img src="screenshots/07-today-dynamic-theme-blue.jpg" width="200" alt="Dynamic Glass Theme Adaptation" /><br/>**Adaptive Glass Palette**<br/>*Automatic accent & frosted card tinting per wallpaper* | <img src="screenshots/08-settings-json-backup.jpg" width="200" alt="Offline JSON Backup & Settings" /><br/>**Data & Celebration FX**<br/>*100% offline JSON export/import, demo loader & haptics* |
 
 ---
 
@@ -25,13 +48,13 @@
 ### 🗓️ 1. Flexible Habit Ledger & Streak Protection
 - **Custom Weekly Schedules**: Schedule habits on specific days of the week (`Sun`–`Sat`) with built-in rest days that never penalize your streak.
 - **Goal Challenges & Ongoing Routines**: Define fixed-horizon challenges (e.g., 21-day, 30-day, or 90-day sprints) or open-ended daily habits.
-- **Daily Subtasks & Quick Tasks**: Break complex habits down into checkable daily subtasks (`HabitSubtask`) alongside a standalone quick-task checklist.
-- **Streak Freeze Shield**: Protect unbroken streaks on sick days, travel days, or emergencies using the built-in Streak Freeze ledger (`HabitFreezeEntity`).
+- **Daily Subtasks & Quick Tasks**: Break complex habits down into checkable daily subtasks (`HabitSubtask`) alongside a standalone quick-task checklist (`Other Tasks`).
+- **Streak Freeze Shield (`❄️`)**: Protect unbroken streaks on sick days, travel days, or emergencies using the built-in Streak Freeze ledger (`HabitFreezeEntity`).
 
 ### 📊 2. 18-Week Discipline Field & Deep Analytics
 - **126-Day Consistency Heatmap**: Visualize 18 weeks of daily execution intensity (`DisciplineFieldCard`) with clear indicators for completed, scheduled, missed, and frozen days.
-- **Multi-Granularity Trend Curves**: Analyze completion rates across **Daily**, **Weekly**, and **Monthly** chart buckets (`TrendsTabContent`).
-- **Category Performance Breakdown**: Compare completion percentages across custom categories and color palettes (`CategoryPerformanceCard`).
+- **Multi-Granularity Trend Curves**: Analyze completion rates across **Daily**, **Weekly**, and **Monthly** chart buckets (`TrendsTabContent`) with interactive dot inspection.
+- **Category Performance Breakdown**: Filter and compare completion percentages across custom categories (`Fitness`, `Focus`, `Health`, `Mind`, etc.).
 
 ### ⏱️ 3. Decoupled Focus Timer & Media Control
 - **Three Precision Timer Modes**: Run **Pomodoro** (25-minute focus intervals with automatic break rounds), **Stopwatch** (count-up time logging), or **Countdown** (custom target duration) via a persistent Android Foreground Service (`TimerService`).
@@ -43,13 +66,13 @@
 - **2×2 Summary Widget (`HabitSummaryWidgetProvider`)**: Track daily completion percentage and active habit counts at a glance.
 - **Timer Control Widget (`TimerWidgetProvider`)**: Start, pause, and monitor your active focus stopwatch or Pomodoro session from the launcher.
 
-### 🎨 5. Custom Glassmorphism & Dynamic Wallpaper Engine
-- **Real-Time Frosted Glass UI**: Custom StackBlur wallpaper pipeline (`FastStackBlur`, `WallpaperBlurHelper`) with adjustable blur radius, dim overlay, and glass card borders (`GlassComponents`).
-- **Automated Wallpaper Rotation**: Rotate custom background wallpapers on a fixed minute interval (`INTERVAL`) or automatic `DAY_NIGHT` schedule (`BackgroundPreferences`).
+### 🎨 5. Vivid Glassmorphism & Dynamic Wallpaper Engine
+- **Real-Time Frosted Glass UI**: Custom StackBlur wallpaper pipeline (`FastStackBlur`, `WallpaperBlurHelper`) with live sliders for **Backdrop Blur (`0–40 dp`)** and **Glass Tint Opacity** (`GlassComponents`).
+- **Automated Wallpaper Rotation**: Manage up to 12 custom wallpapers and rotate them **Every N hours**, **On app open**, or on a **Day & night** schedule (`BackgroundPreferences`).
 - **Tactile Feedback & Celebrations**: Custom completion audio (`SoundPool` + user-selectable sound files), waveform haptic feedback (`AppFeedbackHelper`), and a particle confetti overlay (`ConfettiOverlay`).
 
 ### 🖼️ 6. Studio-Quality Shareable Report Cards & JSON Backup
-- **High-Res PNG Share Cards (`ShareHelper`)**: Generate and share customizable image cards for your **Daily Report** (`DayReportShareCard`), **Single Habit Milestone Curve** (`SingleHabitShareCard`), or **All-Habits Ledger** (`AllHabitsShareCard`).
+- **High-Res PNG Share Cards (`ShareHelper`)**: Generate and share customizable image cards for your **Daily Report** (`DayReportShareCard`), **Single Habit Milestone Curve** (`SingleHabitShareCard`), or **All-Habits Progress Ledger** (`AllHabitsShareCard`).
 - **100% Offline JSON Export/Import (`BackupManager`)**: Back up and restore your entire database (habits, completions, time sessions, subtasks, and tasks) to a portable `.json` file anytime.
 
 ---
@@ -58,10 +81,9 @@
 
 Pre-built Android `.apk` packages are automatically compiled and published via GitHub Actions on every release.
 
-1. Go to the [**Releases**](../../releases/latest) page of this repository.
-2. Under **Assets**, download the latest `RudeusHabit-v*.apk` file to your Android device.
-3. Open the downloaded `.apk` file on your phone or tablet (Android 7.0 Nougat / API 24 or newer).
-4. If prompted by Android, allow **"Install unknown apps"** for your browser or file manager, then tap **Install**.
+1. Go to the [**Releases**](https://github.com/redeus12/rudeus-habit-tracker-pro/releases/latest) page or click [**Direct APK Download (`RudeusHabit-v1.0.0.apk`)**](https://github.com/redeus12/rudeus-habit-tracker-pro/releases/download/v1.0.0/RudeusHabit-v1.0.0.apk).
+2. Open the downloaded `.apk` file on your Android phone or tablet (Android 7.0 Nougat / API 24 or newer).
+3. If prompted by Android, allow **"Install unknown apps"** for your browser or file manager, then tap **Install**.
 
 ---
 
@@ -70,7 +92,7 @@ Pre-built Android `.apk` packages are automatically compiled and published via G
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
 | **Language** | Kotlin `2.2.10` + Coroutines / `StateFlow` | Reactive state management & background concurrency |
-| **UI Framework** | Jetpack Compose + Material 3 + Custom Glass Theme | Declarative 5-tab UI, adaptive phone/tablet layout, frosted glass rendering |
+| **UI Framework** | Jetpack Compose + Material 3 + Vivid Glass Engine | Declarative 5-tab UI, adaptive phone/tablet layout, frosted glass rendering |
 | **Local Database** | AndroidX Room `2.7.0` (SQLite, Schema v6) | Relational persistence for habits, completions, freezes, subtasks, tasks, & time sessions |
 | **Background Work** | Foreground Service (`TimerService`) + WorkManager (`StreakAtRiskWorker`) | Persistent stopwatch/Pomodoro timer & daily 8:00 PM streak-at-risk reminders |
 | **Home Widgets** | Android `AppWidgetProvider` + `AlarmManager` | 3 home-screen widgets with midnight auto-refresh (`WidgetUpdateReceiver`) |
@@ -123,35 +145,23 @@ flowchart TD
 
 ---
 
-## 📸 Screenshots
-
-> _Replace the placeholders below with live device screenshots once captured._
-
-| Today & Subtasks | 18-Week Discipline Field | Focus Timer & Audio | Trends & Share Cards |
-| :---: | :---: | :---: | :---: |
-| <img src="app/src/main/res/drawable/habit_ledger_icon_1783304088132.jpg" width="180" alt="Today Screen Placeholder" /><br/>*Daily Checklist & Streaks* | <img src="app/src/main/res/drawable/img_app_icon_1783794008781.jpg" width="180" alt="Overview Screen Placeholder" /><br/>*126-Day Heatmap* | <img src="app/src/main/res/drawable/habit_ledger_icon_1783304088132.jpg" width="180" alt="Timer Screen Placeholder" /><br/>*Pomodoro & Media Control* | <img src="app/src/main/res/drawable/img_app_icon_1783794008781.jpg" width="180" alt="Trends Screen Placeholder" /><br/>*Analytics & PNG Cards* |
-
----
-
 ## 🛠️ Local Development & Building from Source
 
 ### Prerequisites
-- **Android Studio** (Ladybug / Meerkat or newer) or **Android SDK Command-Line Tools** (API 36)
+- **Android Studio** (Otter / Meerkat or newer) or **Android SDK Command-Line Tools** (API 36)
 - **JDK 17 or JDK 21**
-- **Gradle 9.1+** (automatically bootstrapped via `./gradlew`)
+- **Gradle 9.3.1+** (automatically bootstrapped via `./gradlew`)
 
 ### 1. Clone the Repository
 ```bash
-git clone https://github.com/<your-username>/<your-repo-name>.git
-cd <your-repo-name>
+git clone https://github.com/redeus12/rudeus-habit-tracker-pro.git
+cd rudeus-habit-tracker-pro
 ```
 
 ### 2. Configure Environment File
-The project uses the Secrets Gradle Plugin with `.env.example` as a fallback. Create a local `.env` file (excluded from Git via `.gitignore`):
 ```bash
 cp .env.example .env
 ```
-*(Note: All core habit tracking, analytics, timer, widget, and backup features operate 100% offline on device without requiring any external API key.)*
 
 ### 3. Build the Debug APK via CLI
 ```bash
@@ -171,16 +181,6 @@ app/build/outputs/apk/debug/app-debug.apk
 ```bash
 ./gradlew testDebugUnitTest
 ```
-
----
-
-## 🚀 Automated GitHub Releases (CI/CD)
-
-This repository includes a pre-configured GitHub Actions workflow at [`.github/workflows/release-apk.yml`](.github/workflows/release-apk.yml) that:
-1. Triggers automatically when pushing any version tag matching `v*` (e.g., `v1.0.0`) or manually via **Actions → Build & Release Android APK → Run workflow**.
-2. Sets up JDK, Android SDK, and Gradle on `ubuntu-latest`.
-3. Compiles the Android package (`./gradlew assembleDebug`) and renames it to `RudeusHabit-<version>.apk`.
-4. Publishes a new GitHub Release with auto-generated release notes and attaches the downloadable `.apk`.
 
 ---
 
