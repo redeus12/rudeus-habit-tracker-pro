@@ -740,6 +740,24 @@ fun TimerTabContent(
                     }
                 }
 
+                val audioPickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.OpenMultipleDocuments()
+                ) { uris ->
+                    if (uris.isNotEmpty()) {
+                        val newTracks = uris.map { uri ->
+                            try {
+                                context.contentResolver.takePersistableUriPermission(
+                                    uri,
+                                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                )
+                            } catch (_: Exception) {}
+                            val seg = uri.lastPathSegment?.substringAfterLast('/')?.substringAfterLast(':') ?: "Audio Track"
+                            PlaylistTrack(uri = uri.toString(), name = seg)
+                        }
+                        viewModel.addPlaylistTracks(newTracks)
+                    }
+                }
+
                 // Music Mode Segmented Controls (External YouTube Music / Local Playlist / Off)
                 Surface(
                     shape = RoundedCornerShape(10.dp),

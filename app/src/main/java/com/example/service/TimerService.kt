@@ -510,7 +510,7 @@ class TimerService : Service() {
                             currentTrackName.value = "Active Media (YouTube Music)"
                         }
                         MusicSourceMode.LOCAL -> {
-                            if (wasPausedBeforeStart && isResuming) {
+                            if (wasPausedBeforeStart) {
                                 if (mediaPlayer != null) {
                                     try {
                                         mediaPlayer?.start()

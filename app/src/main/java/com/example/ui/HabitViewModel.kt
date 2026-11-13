@@ -672,7 +672,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
                 viewModelScope.launch {
                     NotificationHelper.cancelHabitReminder(getApplication(), habit.id)
                     if (com.example.service.TimerService.activeHabitId.value == habit.id) {
-                        stopTimer()
+                        com.example.service.TimerService.stopTimer(getApplication())
                     }
                     repository.deleteHabit(habit.id)
                     com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
@@ -694,7 +694,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
                         NotificationHelper.cancelHabitReminder(getApplication(), h.id)
                     }
                     if (com.example.service.TimerService.isRunning.value || com.example.service.TimerService.isPaused.value) {
-                        stopTimer()
+                        com.example.service.TimerService.stopTimer(getApplication())
                     }
                     repository.deleteAllHabits()
                     com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())

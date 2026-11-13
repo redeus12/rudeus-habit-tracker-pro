@@ -51,7 +51,6 @@ object BackupManager {
                     put("name", h.name)
                     put("category", h.category)
                     put("colorHex", h.colorHex)
-                    put("frequencyType", h.frequencyType)
                     put("daysOfWeek", h.daysOfWeek)
                     if (h.durationDays != null) put("durationDays", h.durationDays) else put("durationDays", JSONObject.NULL)
                     put("createdAt", h.createdAt)
@@ -169,7 +168,6 @@ object BackupManager {
                     name = name,
                     category = h.optString("category", "General").ifBlank { "General" },
                     colorHex = h.optString("colorHex", "#E5A93C").ifBlank { "#E5A93C" },
-                    frequencyType = h.optString("frequencyType", "DAILY").ifBlank { "DAILY" },
                     daysOfWeek = h.optString("daysOfWeek", "1,2,3,4,5,6,7").ifBlank { "1,2,3,4,5,6,7" },
                     durationDays = durationDays,
                     createdAt = h.optString("createdAt", DateUtils.todayStr()).ifBlank { DateUtils.todayStr() },
