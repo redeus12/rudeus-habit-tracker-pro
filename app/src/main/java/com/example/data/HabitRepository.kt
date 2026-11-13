@@ -1,5 +1,6 @@
 package com.example.data
 
+import androidx.room.withTransaction
 import com.example.model.Habit
 import com.example.model.Task
 import com.example.model.HabitSubtask
@@ -13,8 +14,16 @@ class HabitRepository(
     private val habitSubtaskDao: HabitSubtaskDao,
     private val timeSessionDao: TimeSessionDao,
     private val habitCompletionDao: HabitCompletionDao,
-    private val habitFreezeDao: HabitFreezeDao
+    private val habitFreezeDao: HabitFreezeDao,
+    private val db: AppDatabase? = null
 ) {
+    private suspend fun <T> runInTransaction(block: suspend () -> T): T {
+        return if (db != null) {
+            db.withTransaction { block() }
+        } else {
+            block()
+        }
+    }
     val allHabits: Flow<List<Habit>> = kotlinx.coroutines.flow.combine(
         habitDao.getAllHabits(),
         habitCompletionDao.getAllCompletionsFlow(),
@@ -72,7 +81,7 @@ class HabitRepository(
         return entity.toDomain(completions, freezes)
     }
 
-    suspend fun insertHabit(habit: Habit) {
+    suspend fun insertHabit(habit: Habit) = runInTransaction {
         habitDao.insertHabit(habit.toEntity())
         
         // Sync completions in the completions table
@@ -116,7 +125,7 @@ class HabitRepository(
         }
     }
 
-    suspend fun freezeAllHabitsForDate(dateStr: String, reason: String = "Rest Day") {
+    suspend fun freezeAllHabitsForDate(dateStr: String, reason: String = "Rest Day") = runInTransaction {
         val habitsList = habitDao.getAllHabitsList()
         for (h in habitsList) {
             habitFreezeDao.insertFreeze(HabitFreezeEntity(h.id, dateStr, reason))
@@ -127,7 +136,7 @@ class HabitRepository(
         habitFreezeDao.deleteFreezesForDate(dateStr)
     }
 
-    suspend fun deleteHabit(id: String) {
+    suspend fun deleteHabit(id: String) = runInTransaction {
         habitDao.deleteHabitById(id)
         habitSubtaskDao.deleteSubtasksByHabitId(id)
         timeSessionDao.deleteSessionsByHabitId(id)
@@ -135,7 +144,7 @@ class HabitRepository(
         habitFreezeDao.deleteFreezesByHabitId(id)
     }
 
-    suspend fun deleteAllHabits() {
+    suspend fun deleteAllHabits() = runInTransaction {
         habitDao.deleteAllHabits()
         taskDao.deleteAllTasks()
         habitSubtaskDao.deleteAllSubtasks()

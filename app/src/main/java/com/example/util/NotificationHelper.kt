@@ -90,9 +90,52 @@ object NotificationHelper {
         }
     }
 
+    fun parseReminderHourMinute(reminderTime: String?): Pair<Int, Int>? {
+        val raw = reminderTime?.trim() ?: return null
+        if (raw.isEmpty()) return null
+        val upper = raw.uppercase()
+        val isPm = upper.endsWith("PM")
+        val isAm = upper.endsWith("AM")
+        val timePart = upper.removeSuffix("AM").removeSuffix("PM").trim()
+        val parts = timePart.split(":")
+        if (parts.size != 2) return null
+        val parsedHour = parts[0].trim().toIntOrNull() ?: return null
+        val parsedMinute = parts[1].trim().toIntOrNull() ?: return null
+        if (parsedMinute !in 0..59) return null
+        val hour24 = when {
+            isPm -> if (parsedHour in 1..12) (if (parsedHour == 12) 12 else parsedHour + 12) else return null
+            isAm -> if (parsedHour in 1..12) (if (parsedHour == 12) 0 else parsedHour) else return null
+            else -> if (parsedHour in 0..23) parsedHour else return null
+        }
+        return hour24 to parsedMinute
+    }
+
+    fun cancelHabitReminder(context: Context, habitId: String) {
+        try {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+            val intent = Intent(context, NotificationReceiver::class.java).apply {
+                putExtra("habit_id", habitId)
+            }
+            val pendingIntent = PendingIntent.getBroadcast(
+                context,
+                habitId.hashCode(),
+                intent,
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+            )
+            if (pendingIntent != null) {
+                alarmManager.cancel(pendingIntent)
+                pendingIntent.cancel()
+            }
+        } catch (e: Exception) {
+            Log.e("NotificationHelper", "Failed to cancel reminder for habitId=$habitId", e)
+        }
+    }
+
     fun scheduleHabitReminder(context: Context, habit: Habit) {
-        if (habit.reminderTime == null) {
-            Log.d("NotificationHelper", "No reminder time defined for habit: ${habit.name}. Skipping scheduling.")
+        val parsed = parseReminderHourMinute(habit.reminderTime)
+        if (habit.isArchived || parsed == null) {
+            Log.d("NotificationHelper", "No valid reminder time or habit archived for: ${habit.name}. Cancelling any existing alarm.")
+            cancelHabitReminder(context, habit.id)
             return
         }
 
@@ -103,6 +146,7 @@ object NotificationHelper {
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             putExtra("habit_id", habit.id)
             putExtra("habit_name", habit.name)
+            putExtra(AppPreferences.EXTRA_INTERNAL_TOKEN, AppPreferences.getOrCreateInternalToken(context))
         }
         
         val pendingIntent = PendingIntent.getBroadcast(
@@ -112,12 +156,13 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val timeParts = habit.reminderTime.split(":")
+        val (hourOfDay, minute) = parsed
         val calendar = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, timeParts[0].toInt())
-            set(Calendar.MINUTE, timeParts[1].toInt())
+            set(Calendar.HOUR_OF_DAY, hourOfDay)
+            set(Calendar.MINUTE, minute)
             set(Calendar.SECOND, 0)
-            if (before(Calendar.getInstance())) {
+            set(Calendar.MILLISECOND, 0)
+            if (!after(Calendar.getInstance())) {
                 add(Calendar.DAY_OF_MONTH, 1)
             }
         }

@@ -21,7 +21,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [34])
 class MigrationAndAnalyticsTest {
 
     @Test
@@ -240,5 +240,91 @@ class MigrationAndAnalyticsTest {
         assertEquals("Completions for habit-b should be unaffected", 2, compsBAfter.size)
 
         db.close()
+    }
+
+    @Test
+    fun testBackupRoundTrip_PreservesArchivedHabitsFreezesAndNullDuration() {
+        val activeHabit = HabitEntity(
+            id = "h_active",
+            name = "Morning Meditation",
+            category = "Mind",
+            colorHex = "#10B981",
+            frequencyType = "DAILY",
+            daysOfWeek = "1,2,3,4,5",
+            durationDays = null,
+            createdAt = "2026-07-01",
+            completions = "",
+            reminderTime = null,
+            isArchived = false,
+            trackTimeSpent = true
+        )
+        val archivedHabit = HabitEntity(
+            id = "h_archived",
+            name = "30 Day Challenge",
+            category = "Fitness",
+            colorHex = "#E5A93C",
+            frequencyType = "DAILY",
+            daysOfWeek = "0,1,2,3,4,5,6",
+            durationDays = 30,
+            createdAt = "2026-06-01",
+            completions = "",
+            reminderTime = "08:30",
+            isArchived = true,
+            trackTimeSpent = false
+        )
+        val completions = listOf(
+            HabitCompletionEntity("h_active", "2026-07-01"),
+            HabitCompletionEntity("h_archived", "2026-06-15")
+        )
+        val freezes = listOf(
+            HabitFreezeEntity("h_active", "2026-07-02", "Traveling")
+        )
+
+        val jsonObj = com.example.util.BackupManager.buildBackupJson(
+            habitEntities = listOf(activeHabit, archivedHabit),
+            completionEntities = completions,
+            freezeEntities = freezes,
+            timeSessionEntities = emptyList(),
+            subtaskEntities = emptyList(),
+            taskEntities = emptyList()
+        )
+
+        val parsed = com.example.util.BackupManager.parseBackupJson(jsonObj.toString())
+        assertEquals(2, parsed.habits.size)
+
+        val restoredActive = parsed.habits.first { it.id == "h_active" }
+        val restoredArchived = parsed.habits.first { it.id == "h_archived" }
+
+        // Verify null durationDays and null reminderTime were not corrupted into 0 or "null"
+        assertEquals(null, restoredActive.durationDays)
+        assertEquals(null, restoredActive.reminderTime)
+        assertFalse(restoredActive.isArchived)
+
+        // Verify archived habit and its durationDays / reminderTime were preserved
+        assertTrue(restoredArchived.isArchived)
+        assertEquals(30, restoredArchived.durationDays)
+        assertEquals("08:30", restoredArchived.reminderTime)
+
+        // Verify freezes and completions round-tripped
+        assertEquals(2, parsed.completions.size)
+        assertEquals(1, parsed.freezes.size)
+        assertEquals("Traveling", parsed.freezes[0].reason)
+        assertEquals("2026-07-02", parsed.freezes[0].dateStr)
+    }
+
+    @Test
+    fun testReminderTimeParser_Handles24hAnd12hAndInvalidFormats() {
+        assertEquals(8 to 30, com.example.util.NotificationHelper.parseReminderHourMinute("08:30"))
+        assertEquals(0 to 5, com.example.util.NotificationHelper.parseReminderHourMinute("00:05"))
+        assertEquals(21 to 45, com.example.util.NotificationHelper.parseReminderHourMinute("21:45"))
+        assertEquals(8 to 30, com.example.util.NotificationHelper.parseReminderHourMinute("08:30 AM"))
+        assertEquals(20 to 30, com.example.util.NotificationHelper.parseReminderHourMinute("08:30 PM"))
+        assertEquals(0 to 15, com.example.util.NotificationHelper.parseReminderHourMinute("12:15 AM"))
+        assertEquals(12 to 15, com.example.util.NotificationHelper.parseReminderHourMinute("12:15 PM"))
+        assertEquals(null, com.example.util.NotificationHelper.parseReminderHourMinute(null))
+        assertEquals(null, com.example.util.NotificationHelper.parseReminderHourMinute(""))
+        assertEquals(null, com.example.util.NotificationHelper.parseReminderHourMinute("25:00"))
+        assertEquals(null, com.example.util.NotificationHelper.parseReminderHourMinute("08:99"))
+        assertEquals(null, com.example.util.NotificationHelper.parseReminderHourMinute("invalid"))
     }
 }

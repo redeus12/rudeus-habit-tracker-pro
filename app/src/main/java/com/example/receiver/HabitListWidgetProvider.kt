@@ -12,7 +12,7 @@ import com.example.R
 import com.example.data.AppDatabase
 import com.example.data.toDomain
 import com.example.data.HabitRepository
-import com.example.data.toEntity
+import com.example.util.AppPreferences
 import com.example.util.DateUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +26,11 @@ class HabitListWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == ACTION_TOGGLE_HABIT) {
+            val token = intent.getStringExtra(AppPreferences.EXTRA_INTERNAL_TOKEN)
+            if (!AppPreferences.verifyInternalToken(context, token)) {
+                Log.w("HabitListWidget", "Rejected toggle broadcast with invalid internal token.")
+                return
+            }
             val habitId = intent.getStringExtra("habit_id")
             Log.d("HabitListWidget", "Toggle broadcast received for habit ID: $habitId")
             if (habitId != null) {
@@ -39,7 +44,8 @@ class HabitListWidgetProvider : AppWidgetProvider() {
                             db.habitSubtaskDao(),
                             db.timeSessionDao(),
                             db.habitCompletionDao(),
-                            db.habitFreezeDao()
+                            db.habitFreezeDao(),
+                            db
                         )
                         val subtaskDao = db.habitSubtaskDao()
                         val habit = repository.getHabitById(habitId)
@@ -92,11 +98,15 @@ class HabitListWidgetProvider : AppWidgetProvider() {
                 val db = AppDatabase.getDatabase(context)
                 val activeEntities = db.habitDao().getAllHabitsList()
                 val completionsList = db.habitCompletionDao().getAllCompletionsList()
+                val freezesList = db.habitFreezeDao().getAllFreezesList()
                 val completionsMap = completionsList.groupBy { it.habitId }
+                    .mapValues { entry -> entry.value.map { it.dateStr }.toSet() }
+                val freezesMap = freezesList.groupBy { it.habitId }
                     .mapValues { entry -> entry.value.map { it.dateStr }.toSet() }
                 val habits = activeEntities.map { entity ->
                     val comps = completionsMap[entity.id] ?: emptySet()
-                    entity.toDomain(comps)
+                    val frzs = freezesMap[entity.id] ?: emptySet()
+                    entity.toDomain(comps, frzs)
                 }
 
                 val today = DateUtils.todayStr()
@@ -209,6 +219,7 @@ class HabitListWidgetProvider : AppWidgetProvider() {
                             val toggleIntent = Intent(context, HabitListWidgetProvider::class.java).apply {
                                 action = ACTION_TOGGLE_HABIT
                                 putExtra("habit_id", habit.id)
+                                putExtra(AppPreferences.EXTRA_INTERNAL_TOKEN, AppPreferences.getOrCreateInternalToken(context))
                             }
                             val requestCode = widgetId * 31 + habit.id.hashCode()
                             val togglePendingIntent = PendingIntent.getBroadcast(

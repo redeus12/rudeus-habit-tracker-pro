@@ -14,6 +14,7 @@ import com.example.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -490,6 +491,7 @@ class TimerService : Service() {
                 if (target > 0L) {
                     targetDuration.value = target
                 }
+                val wasPausedBeforeStart = isPaused.value
                 isRunning.value = true
                 isPaused.value = false
 
@@ -508,8 +510,7 @@ class TimerService : Service() {
                             currentTrackName.value = "Active Media (YouTube Music)"
                         }
                         MusicSourceMode.LOCAL -> {
-                            val isResuming = isPaused.value
-                            if (isResuming) {
+                            if (wasPausedBeforeStart && isResuming) {
                                 if (mediaPlayer != null) {
                                     try {
                                         mediaPlayer?.start()
@@ -1114,6 +1115,7 @@ class TimerService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         stopTimerCoroutine()
+        serviceScope.cancel()
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()

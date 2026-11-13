@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import android.Manifest
@@ -72,6 +73,10 @@ fun HabitLedgerScreen(
 
     var showSplash by rememberSaveable { mutableStateOf(true) }
     var currentTab by rememberSaveable { mutableStateOf(0) } // 0 = Today, 1 = Overview, 2 = Timer, 3 = Trends, 4 = Settings
+
+    BackHandler(enabled = !showSplash && isOnboardingCompleted && currentTab != 0) {
+        currentTab = 0
+    }
 
     if (showSplash) {
         SplashScreen(onSplashComplete = { showSplash = false })

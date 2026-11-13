@@ -414,6 +414,7 @@ fun SingleRow7DayHeatmap(
     ) {
         last7Dates.forEach { date ->
             val isDone = DateUtils.isDone(habit, date)
+            val isFrozen = DateUtils.isFrozen(habit, date)
             val isMissed = DateUtils.isMissed(habit, date)
             val isScheduled = DateUtils.isScheduled(habit, date)
             val isToday = date == DateUtils.todayStr()
@@ -421,11 +422,13 @@ fun SingleRow7DayHeatmap(
             val cellColor = when {
                 !isScheduled -> AppTheme.colors.surface3
                 isDone -> habit.color
+                isFrozen -> Color(0xFF26C6DA).copy(alpha = 0.25f)
                 isMissed -> MutedCrimson.copy(alpha = 0.35f)
                 isToday -> accentColor.copy(alpha = 0.2f)
                 else -> ClayOrange.copy(alpha = 0.35f)
             }
             val borderColor = when {
+                isFrozen -> Color(0xFF26C6DA)
                 isMissed -> MutedCrimson
                 isToday && !isDone -> accentColor
                 else -> Color.Transparent

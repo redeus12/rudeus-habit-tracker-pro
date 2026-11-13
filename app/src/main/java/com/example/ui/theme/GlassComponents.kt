@@ -459,13 +459,13 @@ fun GlassSliderRow(
         ) {
             Text(
                 text = label,
-                color = Color.White,
+                color = AppTheme.colors.text,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp
             )
             Text(
                 text = valueText,
-                color = Color.White.copy(alpha = 0.85f),
+                color = AppTheme.colors.textMuted,
                 fontWeight = FontWeight.Bold,
                 fontSize = 12.sp
             )
@@ -479,7 +479,7 @@ fun GlassSliderRow(
             colors = SliderDefaults.colors(
                 thumbColor = accentColor,
                 activeTrackColor = accentColor,
-                inactiveTrackColor = Color.White.copy(alpha = 0.30f),
+                inactiveTrackColor = if (AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark) Color.White.copy(alpha = 0.30f) else AppTheme.colors.border,
                 activeTickColor = Color.Transparent,
                 inactiveTickColor = Color.Transparent
             ),

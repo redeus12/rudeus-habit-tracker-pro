@@ -63,13 +63,23 @@ object ShareBackgroundHelper {
                             val dx = ((scaledW - targetWidth) / 2).coerceAtLeast(0)
                             val dy = ((scaledH - targetHeight) / 2).coerceAtLeast(0)
 
-                            val cropped = Bitmap.createBitmap(
+                            val croppedSource = Bitmap.createBitmap(
                                 scaled,
                                 dx,
                                 dy,
                                 targetWidth,
                                 targetHeight
-                            ).copy(Bitmap.Config.ARGB_8888, true)
+                            )
+                            val cropped = croppedSource.copy(Bitmap.Config.ARGB_8888, true)
+                            if (croppedSource !== scaled && croppedSource !== cropped) {
+                                croppedSource.recycle()
+                            }
+                            if (scaled !== decoded && scaled !== cropped) {
+                                scaled.recycle()
+                            }
+                            if (decoded !== cropped) {
+                                decoded.recycle()
+                            }
 
                             // Check luminance of the cropped wallpaper
                             val sampleStep = 32
@@ -103,6 +113,12 @@ object ShareBackgroundHelper {
                             val blurRad = (config.blurRadius / 2f).roundToInt().coerceIn(3, 25)
                             val blurredLowRes = FastStackBlur.blur(lowRes, blurRad)
                             val blurred = Bitmap.createScaledBitmap(blurredLowRes, targetWidth, targetHeight, true)
+                            if (lowRes !== cropped && lowRes !== blurredLowRes) {
+                                lowRes.recycle()
+                            }
+                            if (blurredLowRes !== blurred) {
+                                blurredLowRes.recycle()
+                            }
 
                             return ExportBackgroundBundle(
                                 baseBackground = cropped,

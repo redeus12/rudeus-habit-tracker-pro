@@ -10,9 +10,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 import com.example.data.AppDatabase
+import com.example.data.HabitCompletionEntity
 import com.example.data.toDomain
-import com.example.data.toEntity
-import com.example.model.Habit
+import com.example.util.AppPreferences
 import com.example.util.DateUtils
 import com.example.util.NotificationHelper
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +37,13 @@ class NotificationReceiver : BroadcastReceiver() {
             return
         }
 
+        // Verify internal broadcast token to prevent spoofing from external apps
+        val token = intent.getStringExtra(AppPreferences.EXTRA_INTERNAL_TOKEN)
+        if (!AppPreferences.verifyInternalToken(context, token)) {
+            Log.w("NotificationReceiver", "Rejected broadcast with missing or invalid internal token.")
+            return
+        }
+
         // 2. Handle Mark Done action from Notification buttons
         if (action == "ACTION_MARK_DONE") {
             val habitId = intent.getStringExtra("habit_id")
@@ -57,7 +64,42 @@ class NotificationReceiver : BroadcastReceiver() {
             return
         }
 
-        showReminderNotification(context, habitId, habitName)
+        handleScheduledReminder(context, habitId, habitName)
+    }
+
+    private fun handleScheduledReminder(context: Context, habitId: String, fallbackHabitName: String) {
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getDatabase(context)
+                val entity = db.habitDao().getHabitById(habitId)
+                if (entity == null || entity.isArchived || entity.reminderTime.isNullOrBlank()) {
+                    NotificationHelper.cancelHabitReminder(context, habitId)
+                    return@launch
+                }
+                val completions = db.habitCompletionDao().getCompletionsForHabit(habitId).toSet()
+                val freezes = db.habitFreezeDao().getFreezesForHabit(habitId).toSet()
+                val habit = entity.toDomain(completions, freezes)
+
+                // Always reschedule the next day's reminder since AlarmManager exact alarms are one-shot
+                NotificationHelper.scheduleHabitReminder(context, habit)
+
+                val today = DateUtils.todayStr()
+                val shouldNotify = DateUtils.isScheduled(habit, today) &&
+                    !DateUtils.isDone(habit, today) &&
+                    !DateUtils.isFrozen(habit, today)
+
+                if (shouldNotify) {
+                    showReminderNotification(context, habit.id, habit.name.ifBlank { fallbackHabitName })
+                } else {
+                    Log.d("NotificationReceiver", "Skipping notification for '${habit.name}' (already done, frozen, or not scheduled today).")
+                }
+            } catch (e: Exception) {
+                Log.e("NotificationReceiver", "Error handling scheduled reminder for $habitId", e)
+            } finally {
+                pendingResult.finish()
+            }
+        }
     }
 
     private fun showReminderNotification(context: Context, habitId: String, habitName: String) {
@@ -89,6 +131,7 @@ class NotificationReceiver : BroadcastReceiver() {
             val markDoneIntent = Intent(context, NotificationReceiver::class.java).apply {
                 action = "ACTION_MARK_DONE"
                 putExtra("habit_id", habitId)
+                putExtra(AppPreferences.EXTRA_INTERNAL_TOKEN, AppPreferences.getOrCreateInternalToken(context))
             }
             val markDonePendingIntent = PendingIntent.getBroadcast(
                 context,
@@ -133,19 +176,24 @@ class NotificationReceiver : BroadcastReceiver() {
                 Log.d("NotificationReceiver", "Fetching database in markHabitDone...")
                 val db = AppDatabase.getDatabase(context)
                 val dao = db.habitDao()
+                val completionDao = db.habitCompletionDao()
+                val subtaskDao = db.habitSubtaskDao()
                 val entity = dao.getHabitById(habitId)
                 if (entity != null) {
-                    val habit = entity.toDomain()
                     val today = DateUtils.todayStr()
-                    
-                    if (!habit.completions.contains(today)) {
-                        val updatedCompletions = habit.completions + today
-                        val updatedHabit = habit.copy(completions = updatedCompletions)
-                        dao.insertHabit(updatedHabit.toEntity())
-                        Log.d("NotificationReceiver", "Habit '${habit.name}' marked completed in database.")
+                    val existingCompletions = completionDao.getCompletionsForHabit(habitId).toSet()
+                    if (!existingCompletions.contains(today)) {
+                        completionDao.insertCompletion(HabitCompletionEntity(habitId = habitId, dateStr = today))
+                        val subtasks = subtaskDao.getSubtasksForHabitAndDate(habitId, today)
+                        subtasks.forEach { sub ->
+                            if (!sub.isCompleted) {
+                                subtaskDao.insertSubtask(sub.copy(isCompleted = true))
+                            }
+                        }
+                        Log.d("NotificationReceiver", "Habit '${entity.name}' marked completed in habit_completions.")
                         WidgetUpdateHelper.updateWidgets(context)
                     } else {
-                        Log.d("NotificationReceiver", "Habit '${habit.name}' was already completed for today.")
+                        Log.d("NotificationReceiver", "Habit '${entity.name}' was already completed for today.")
                     }
 
                     // Dismiss the notification

@@ -146,7 +146,7 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
         val timeSessionDao = db.timeSessionDao()
         val completionDao = db.habitCompletionDao()
         val freezeDao = db.habitFreezeDao()
-        repository = HabitRepository(dao, taskDao, subtaskDao, timeSessionDao, completionDao, freezeDao)
+        repository = HabitRepository(dao, taskDao, subtaskDao, timeSessionDao, completionDao, freezeDao, db)
         
         habits = repository.allHabits.stateIn(
             scope = viewModelScope,
@@ -502,19 +502,29 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun freezeAllHabitsToday(reason: String = "Rest Day") {
+        freezeAllHabitsForDate(DateUtils.todayStr(), reason)
+    }
+
+    fun freezeAllHabitsForDate(dateStr: String, reason: String = "Rest Day") {
         viewModelScope.launch {
-            repository.freezeAllHabitsForDate(DateUtils.todayStr(), reason)
+            repository.freezeAllHabitsForDate(dateStr, reason)
             com.example.util.AppFeedbackHelper.vibrateClick(getApplication())
-            showToast("❄️ Protected all habits for today ($reason)!")
+            val label = if (dateStr == DateUtils.todayStr()) "today" else dateStr
+            showToast("❄️ Protected all habits for $label ($reason)!")
             com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
         }
     }
 
     fun unfreezeAllHabitsToday() {
+        unfreezeAllHabitsForDate(DateUtils.todayStr())
+    }
+
+    fun unfreezeAllHabitsForDate(dateStr: String) {
         viewModelScope.launch {
-            repository.unfreezeAllHabitsForDate(DateUtils.todayStr())
+            repository.unfreezeAllHabitsForDate(dateStr)
             com.example.util.AppFeedbackHelper.vibrateClick(getApplication())
-            showToast("Removed Today's freeze protection.")
+            val label = if (dateStr == DateUtils.todayStr()) "today" else dateStr
+            showToast("Removed freeze protection for $label.")
             com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
         }
     }
@@ -660,6 +670,10 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
             message = "Delete this habit? This removes all its tracked history.",
             onConfirm = {
                 viewModelScope.launch {
+                    NotificationHelper.cancelHabitReminder(getApplication(), habit.id)
+                    if (com.example.service.TimerService.activeHabitId.value == habit.id) {
+                        stopTimer()
+                    }
                     repository.deleteHabit(habit.id)
                     com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
                     closeModal()
@@ -675,6 +689,13 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
             message = "Reset all habit data? This clears everything you have tracked.",
             onConfirm = {
                 viewModelScope.launch {
+                    val allCurrent = habits.value + archivedHabits.value
+                    allCurrent.forEach { h ->
+                        NotificationHelper.cancelHabitReminder(getApplication(), h.id)
+                    }
+                    if (com.example.service.TimerService.isRunning.value || com.example.service.TimerService.isPaused.value) {
+                        stopTimer()
+                    }
                     repository.deleteAllHabits()
                     com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
                     showToast("Data cleared")
@@ -685,7 +706,9 @@ class HabitViewModel(application: Application) : AndroidViewModel(application) {
 
     fun restoreArchivedHabit(habit: Habit) {
         viewModelScope.launch {
-            repository.insertHabit(habit.copy(isArchived = false))
+            val restored = habit.copy(isArchived = false)
+            repository.insertHabit(restored)
+            NotificationHelper.scheduleHabitReminder(getApplication(), restored)
             com.example.receiver.WidgetUpdateHelper.updateWidgets(getApplication())
             showToast("Restored habit to active ledger")
         }

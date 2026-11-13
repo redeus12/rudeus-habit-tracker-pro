@@ -161,14 +161,14 @@ fun BackgroundSettingsCard(
                             text = "Custom Wallpaper & Glass",
                             style = Typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White,
+                                color = AppTheme.colors.text,
                                 fontSize = 16.sp
                             )
                         )
                         Text(
                             text = if (config.wallpapers.size > 1) "${config.wallpapers.size} wallpapers in rotation" else "Frosted translucent glass with backdrop blur",
                             style = Typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.80f),
+                                color = AppTheme.colors.textMuted,
                                 fontSize = 12.sp
                             )
                         )
@@ -190,7 +190,7 @@ fun BackgroundSettingsCard(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = accentColor,
                         uncheckedThumbColor = Color.White,
-                        uncheckedTrackColor = Color.White.copy(alpha = 0.30f),
+                        uncheckedTrackColor = if (AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark) Color.White.copy(alpha = 0.30f) else AppTheme.colors.border,
                         uncheckedBorderColor = Color.Transparent
                     )
                 )
@@ -210,7 +210,7 @@ fun BackgroundSettingsCard(
                         text = "Wallpapers (${config.wallpapers.size}/${BackgroundPreferences.MAX_WALLPAPERS_COUNT})",
                         style = Typography.titleSmall.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = AppTheme.colors.text,
                             fontSize = 13.sp
                         )
                     )
@@ -218,7 +218,7 @@ fun BackgroundSettingsCard(
                         Text(
                             text = "Tap to activate",
                             style = Typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = AppTheme.colors.textMuted,
                                 fontSize = 11.sp
                             )
                         )
@@ -232,6 +232,7 @@ fun BackgroundSettingsCard(
                 ) {
                     // "Add" Tile
                     item {
+                        val isDarkOrGlass = AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark
                         Surface(
                             onClick = {
                                 if (config.wallpapers.size >= BackgroundPreferences.MAX_WALLPAPERS_COUNT) {
@@ -244,8 +245,8 @@ fun BackgroundSettingsCard(
                             },
                             modifier = Modifier.size(72.dp),
                             shape = RoundedCornerShape(16.dp),
-                            color = Color.White.copy(alpha = 0.10f),
-                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.30f)),
+                            color = if (isDarkOrGlass) Color.White.copy(alpha = 0.10f) else AppTheme.colors.surface2,
+                            border = BorderStroke(1.dp, if (isDarkOrGlass) Color.White.copy(alpha = 0.30f) else AppTheme.colors.border),
                             shadowElevation = 0.dp
                         ) {
                             Column(
@@ -264,7 +265,7 @@ fun BackgroundSettingsCard(
                                     text = "Add",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color.White
+                                    color = AppTheme.colors.text
                                 )
                             }
                         }

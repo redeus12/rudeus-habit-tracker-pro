@@ -11,6 +11,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -257,11 +259,43 @@ fun HabitModal(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 ModalLabel("REMINDER TIME (HH:MM)")
+                val modalContext = androidx.compose.ui.platform.LocalContext.current
                 OutlinedTextField(
                     value = reminderTime,
                     onValueChange = { if (it.length <= 5) reminderTime = it },
-                    placeholder = { Text("e.g. 08:30", color = AppTheme.colors.textFaint) },
+                    placeholder = { Text("e.g. 08:30 (or tap clock)", color = AppTheme.colors.textFaint) },
                     singleLine = true,
+                    trailingIcon = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (reminderTime.isNotBlank()) {
+                                IconButton(onClick = { reminderTime = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "Clear reminder time",
+                                        tint = AppTheme.colors.textMuted
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = {
+                                    val parsed = com.example.util.NotificationHelper.parseReminderHourMinute(reminderTime)
+                                    val initialHour = parsed?.first ?: 8
+                                    val initialMinute = parsed?.second ?: 30
+                                    android.app.TimePickerDialog(
+                                        modalContext,
+                                        { _, h, m ->
+                                            reminderTime = String.format(java.util.Locale.US, "%02d:%02d", h, m)
+                                        },
+                                        initialHour,
+                                        initialMinute,
+                                        true
+                                    ).show()
+                                }
+                            ) {
+                                Text("Pick", color = accentColor, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = AppTheme.colors.surface,
                         unfocusedContainerColor = AppTheme.colors.surface,
@@ -273,6 +307,33 @@ fun HabitModal(
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("07:00", "09:00", "12:00", "18:00", "21:00").forEach { preset ->
+                        val isPresetSelected = reminderTime.trim() == preset
+                        Surface(
+                            onClick = { reminderTime = if (isPresetSelected) "" else preset },
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isPresetSelected) accentContainer else AppTheme.colors.surface2,
+                            border = BorderStroke(1.dp, if (isPresetSelected) accentColor else AppTheme.colors.border),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = preset,
+                                style = Typography.labelSmall.copy(
+                                    color = if (isPresetSelected) onAccentColor else AppTheme.colors.textMuted,
+                                    fontWeight = if (isPresetSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 11.sp
+                                ),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                modifier = Modifier.padding(vertical = 6.dp)
+                            )
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 

@@ -95,10 +95,10 @@ fun TodayTabContent(
     val onAccentColor = MaterialTheme.colorScheme.onPrimary
     val accentContainer = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
 
-    var selectedDate by remember { mutableStateOf(DateUtils.todayStr()) }
-    var selectedCategory by remember { mutableStateOf("All") }
-    var isHabitsSectionExpanded by remember { mutableStateOf(false) }
-    var isTasksSectionExpanded by remember { mutableStateOf(false) }
+    var selectedDate by rememberSaveable { mutableStateOf(DateUtils.todayStr()) }
+    var selectedCategory by rememberSaveable { mutableStateOf("All") }
+    var isHabitsSectionExpanded by rememberSaveable { mutableStateOf(true) }
+    var isTasksSectionExpanded by rememberSaveable { mutableStateOf(false) }
     var isFreezeModalOpen by remember { mutableStateOf(false) }
     var freezeModalHabit by remember { mutableStateOf<Habit?>(null) }
     
@@ -318,7 +318,7 @@ fun TodayTabContent(
                             .fillMaxWidth()
                             .height(6.dp),
                         color = accentColor,
-                        trackColor = Color.White.copy(alpha = 0.25f),
+                        trackColor = if (isGlass) Color.White.copy(alpha = 0.25f) else AppTheme.colors.border,
                         strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
                     )
 
@@ -664,7 +664,7 @@ fun TodayTabContent(
             onClose = { isFreezeModalOpen = false },
             onConfirmFreeze = { targetId, dateStr, reason ->
                 if (targetId == null) {
-                    viewModel.freezeAllHabitsToday(reason)
+                    viewModel.freezeAllHabitsForDate(dateStr, reason)
                 } else {
                     val targetHabit = freezeModalHabit ?: return@StreakFreezeModal
                     viewModel.toggleFreezeDate(targetHabit, dateStr, reason)
@@ -672,7 +672,7 @@ fun TodayTabContent(
             },
             onUnfreeze = { targetId, dateStr ->
                 if (targetId == null) {
-                    viewModel.unfreezeAllHabitsToday()
+                    viewModel.unfreezeAllHabitsForDate(dateStr)
                 } else {
                     val targetHabit = freezeModalHabit ?: return@StreakFreezeModal
                     viewModel.toggleFreezeDate(targetHabit, dateStr)
@@ -978,7 +978,7 @@ fun TodayHabitItem(
                                         Text(
                                             text = "🏆 Best Streak: $longestStreak days",
                                             style = Typography.labelSmall.copy(
-                                                color = Color.White,
+                                                color = if (AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark) Color.White else AppTheme.colors.text,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 11.sp
                                             )
@@ -998,7 +998,7 @@ fun TodayHabitItem(
                                         Text(
                                             text = "✅ Total logs: $totalCompletions times",
                                             style = Typography.labelSmall.copy(
-                                                color = Color.White,
+                                                color = if (AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark) Color.White else AppTheme.colors.text,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 11.sp
                                             )
@@ -1257,9 +1257,22 @@ private fun HabitExpandedActionButton(
     modifier: Modifier = Modifier,
     isDanger: Boolean = false
 ) {
-    val bgColor = if (isDanger) Color(0xFFE53935).copy(alpha = 0.25f) else Color.White.copy(alpha = 0.15f)
-    val borderColor = if (isDanger) Color(0xFFFF8A80).copy(alpha = 0.40f) else Color.White.copy(alpha = 0.30f)
-    val contentColor = if (isDanger) Color(0xFFFFCDD2) else Color.White
+    val isDarkOrGlass = AppTheme.colors.isGlassEnabled || AppTheme.colors.isDark
+    val bgColor = when {
+        isDanger -> Color(0xFFE53935).copy(alpha = if (isDarkOrGlass) 0.25f else 0.12f)
+        isDarkOrGlass -> Color.White.copy(alpha = 0.15f)
+        else -> AppTheme.colors.surface2
+    }
+    val borderColor = when {
+        isDanger -> Color(0xFFFF8A80).copy(alpha = 0.45f)
+        isDarkOrGlass -> Color.White.copy(alpha = 0.30f)
+        else -> AppTheme.colors.border
+    }
+    val contentColor = when {
+        isDanger -> if (isDarkOrGlass) Color(0xFFFFCDD2) else Color(0xFFC62828)
+        isDarkOrGlass -> Color.White
+        else -> AppTheme.colors.text
+    }
 
     Surface(
         onClick = onClick,

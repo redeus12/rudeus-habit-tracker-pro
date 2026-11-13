@@ -13,6 +13,8 @@ object AppPreferences {
     private const val KEY_HAPTICS_ENABLED = "haptics_enabled"
     private const val KEY_CUSTOM_SOUND_NAME = "custom_sound_name"
     private const val KEY_CUSTOM_SOUND_PATH = "custom_sound_path"
+    private const val KEY_INTERNAL_BROADCAST_TOKEN = "internal_broadcast_token"
+    const val EXTRA_INTERNAL_TOKEN = "extra_internal_token"
 
     private var prefs: SharedPreferences? = null
 
@@ -74,5 +76,22 @@ object AppPreferences {
     fun setHapticsEnabled(enabled: Boolean) {
         _isHapticsEnabled.value = enabled
         prefs?.edit()?.putBoolean(KEY_HAPTICS_ENABLED, enabled)?.apply()
+    }
+
+    @Synchronized
+    fun getOrCreateInternalToken(context: Context): String {
+        init(context)
+        val p = prefs ?: context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        var token = p.getString(KEY_INTERNAL_BROADCAST_TOKEN, null)
+        if (token.isNullOrBlank()) {
+            token = java.util.UUID.randomUUID().toString()
+            p.edit().putString(KEY_INTERNAL_BROADCAST_TOKEN, token).apply()
+        }
+        return token
+    }
+
+    fun verifyInternalToken(context: Context, candidate: String?): Boolean {
+        if (candidate.isNullOrBlank()) return false
+        return candidate == getOrCreateInternalToken(context)
     }
 }

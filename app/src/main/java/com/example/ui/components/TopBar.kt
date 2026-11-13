@@ -75,6 +75,10 @@ fun TopBar(
             }
 
             // Right: Status Pill Badge (Streak / Completions) + Profile Avatar Button
+            val pillBgColor = if (isGlass) Color.White.copy(alpha = 0.18f) else AppTheme.colors.surface
+            val pillBorderColor = if (isGlass) Color.White.copy(alpha = 0.35f) else AppTheme.colors.border
+            val pillContentColor = if (isGlass) Color.White else AppTheme.colors.text
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -82,8 +86,8 @@ fun TopBar(
                 // "0/7 Done" Flame Pill with root-sized backdrop blur
                 GlassSurface(
                     shape = RoundedCornerShape(20.dp),
-                    backgroundColor = Color.White.copy(alpha = 0.18f),
-                    borderColor = Color.White.copy(alpha = 0.35f),
+                    backgroundColor = pillBgColor,
+                    borderColor = pillBorderColor,
                     modifier = Modifier.heightIn(min = 40.dp)
                 ) {
                     Row(
@@ -98,7 +102,7 @@ fun TopBar(
                         Text(
                             text = "$completedTodayCount/$activeHabitsCount Done",
                             style = Typography.labelMedium.copy(
-                                color = Color.White,
+                                color = pillContentColor,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
@@ -110,13 +114,13 @@ fun TopBar(
                 GlassIconButton(
                     onClick = onProfileClick,
                     size = 40.dp,
-                    backgroundColor = Color.White.copy(alpha = 0.18f),
-                    borderColor = Color.White.copy(alpha = 0.35f)
+                    backgroundColor = pillBgColor,
+                    borderColor = pillBorderColor
                 ) {
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Profile",
-                        tint = Color.White,
+                        tint = pillContentColor,
                         modifier = Modifier.size(20.dp)
                     )
                 }

@@ -17,6 +17,9 @@ interface HabitDao {
     @Query("SELECT * FROM habits WHERE isArchived = 0")
     suspend fun getAllHabitsList(): List<HabitEntity>
 
+    @Query("SELECT * FROM habits")
+    suspend fun getAllHabitsIncludingArchivedList(): List<HabitEntity>
+
     @Query("SELECT * FROM habits WHERE id = :id")
     suspend fun getHabitById(id: String): HabitEntity?
 

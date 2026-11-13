@@ -740,7 +740,7 @@ fun TimerTabContent(
                     }
                 }
 
-                // Music Mode Segmented Controls (External YouTube Music / Off)
+                // Music Mode Segmented Controls (External YouTube Music / Local Playlist / Off)
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = if (isGlass) Color.White.copy(alpha = 0.06f) else AppTheme.colors.surface2,
@@ -752,8 +752,8 @@ fun TimerTabContent(
                             .padding(3.dp),
                         horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
-                        listOf(MusicSourceMode.EXTERNAL, MusicSourceMode.OFF).forEach { mode ->
-                            val isSelected = (musicSourceMode == mode) || (mode == MusicSourceMode.OFF && musicSourceMode == MusicSourceMode.LOCAL)
+                        listOf(MusicSourceMode.EXTERNAL, MusicSourceMode.LOCAL, MusicSourceMode.OFF).forEach { mode ->
+                            val isSelected = musicSourceMode == mode
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) Color.White else Color.Transparent,
@@ -767,8 +767,8 @@ fun TimerTabContent(
                                 Text(
                                     text = when (mode) {
                                         MusicSourceMode.EXTERNAL -> "YouTube Music"
+                                        MusicSourceMode.LOCAL -> "Local Audio"
                                         MusicSourceMode.OFF -> "Off"
-                                        else -> "Off"
                                     },
                                     style = Typography.labelMedium.copy(
                                         color = if (isSelected) Color.Black.copy(alpha = 0.87f) else AppTheme.colors.textMuted,
@@ -825,6 +825,17 @@ fun TimerTabContent(
                                     Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, tint = AppTheme.colors.text, modifier = Modifier.size(14.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Text("Open YT Music", color = AppTheme.colors.text, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else if (musicSourceMode == MusicSourceMode.LOCAL) {
+                                Button(
+                                    onClick = { audioPickerLauncher.launch(arrayOf("audio/*")) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AppTheme.colors.surface3),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = AppTheme.colors.text, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Add Tracks (${playlist.size})", color = AppTheme.colors.text, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
