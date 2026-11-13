@@ -2,8 +2,6 @@ name: Build & Release Android APK
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -24,24 +22,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Unpack Project Bundle (First-Run Bootstrap)
-        if: hashFiles('project-bundle.tar.gz') != ''
-        run: |
-          tar -xzf project-bundle.tar.gz
-          rm -f project-bundle.tar.gz
-          sed -i "s|OWNER/REPO|${GITHUB_REPOSITORY}|g" README.md
-          sed -i 's/\r$//' ./gradlew
-          chmod +x ./gradlew
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "feat: initial release of Rudeus Habit (Remix Habit Tracker Pro)" || true
-          git push origin HEAD:main
-          git tag -f v1.0.0
-          git push origin v1.0.0 --force
 
       - name: Set up JDK 17 & 21
         uses: actions/setup-java@v4
@@ -51,9 +31,12 @@ jobs:
             21
             17
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Accept Android SDK Licenses
         run: |
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          yes | sdkmanager --licenses > /dev/null || true
 
       - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
