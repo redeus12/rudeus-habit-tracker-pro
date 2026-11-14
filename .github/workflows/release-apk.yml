@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  workflows: write
 
 jobs:
   build-and-release:
@@ -33,6 +34,7 @@ jobs:
           tar -xzf patch-bundle.tar.gz
           rm -f patch-bundle.tar.gz
           rm -f .env.example
+          git checkout HEAD -- .github/workflows/release-apk.yml
           sed -i 's/\r$//' ./gradlew
           chmod +x ./gradlew
           git config user.name "github-actions[bot]"
