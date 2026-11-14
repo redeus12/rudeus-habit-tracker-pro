@@ -169,8 +169,14 @@ class TimerModeSwitchTest {
                     category = "Work",
                     colorHex = "#34A853",
                     days = listOf(0, 1, 2, 3, 4, 5, 6),
-                    createdAt = today,
-                    trackTimeSpent = true
+                    
+                durationDays = null,
+
+                createdAt = today,
+                    
+                completions = emptySet(),
+
+                trackTimeSpent = true
                 )
             )
 
