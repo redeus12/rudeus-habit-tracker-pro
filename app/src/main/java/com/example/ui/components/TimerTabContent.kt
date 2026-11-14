@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,7 +56,14 @@ fun TimerTabContent(
     val habits by viewModel.habits.collectAsStateWithLifecycle()
     val todayStr = remember { DateUtils.todayStr() }
 
+    // Ensure saved state is restored on initial open and synced with timestamps
+    LaunchedEffect(Unit) {
+        TimerService.restoreTimerState(context)
+        TimerService.syncActiveModeFlows()
+    }
+
     // Service state
+    val modeStates by TimerService.modeStates.collectAsStateWithLifecycle()
     val runningHabitId by TimerService.activeHabitId.collectAsStateWithLifecycle()
     val runningHabitName by TimerService.activeHabitName.collectAsStateWithLifecycle()
     val isRunning by TimerService.isRunning.collectAsStateWithLifecycle()
@@ -95,11 +103,14 @@ fun TimerTabContent(
     }
 
     // Active habit selection logic:
-    // If the timer is running or paused, the service's habit (TimerService.activeHabitId) always wins.
+    // If any timer mode is running or paused, the service's habit (TimerService.activeHabitId) always wins.
     // Only when the timer is idle does the picker selection apply, then scheduled today, then trackTimeSpent, then first.
+    val anyTimerActive = remember(modeStates, isRunning, isPaused) {
+        isRunning || isPaused || modeStates.values.any { it.isRunning || it.isPaused }
+    }
     val selectedTimerHabitId by viewModel.selectedTimerHabitId.collectAsStateWithLifecycle()
-    val activeHabit = remember(runningHabitId, selectedTimerHabitId, habits, isRunning, isPaused) {
-        if ((isRunning || isPaused) && !runningHabitId.isNullOrBlank()) {
+    val activeHabit = remember(runningHabitId, selectedTimerHabitId, habits, anyTimerActive) {
+        if (anyTimerActive && !runningHabitId.isNullOrBlank()) {
             habits.find { it.id == runningHabitId }
         } else if (!selectedTimerHabitId.isNullOrBlank()) {
             habits.find { it.id == selectedTimerHabitId }
@@ -120,18 +131,35 @@ fun TimerTabContent(
 
     var showHabitPicker by remember { mutableStateOf(false) }
 
-    // Timer modes state
-    var selectedTimerMode by remember { mutableStateOf(FocusTimerMode.POMODORO) }
-    var countdownTargetMinutes by remember { mutableIntStateOf(50) }
+    // Timer modes state: initialized from TimerService.activeMode and persisted with rememberSaveable + service state
+    var savedModeName by rememberSaveable { mutableStateOf(TimerService.activeMode.value) }
+    LaunchedEffect(activeServiceMode) {
+        if (savedModeName != activeServiceMode) {
+            savedModeName = activeServiceMode
+        }
+    }
+    LaunchedEffect(savedModeName) {
+        if (TimerService.activeMode.value != savedModeName) {
+            TimerService.selectMode(context, savedModeName)
+        }
+    }
 
-    // Sync selectedTimerMode with service if running
-    LaunchedEffect(activeServiceMode, isRunning) {
-        if (isRunning || isPaused) {
-            when (activeServiceMode) {
-                "POMODORO" -> selectedTimerMode = FocusTimerMode.POMODORO
-                "STOPWATCH" -> selectedTimerMode = FocusTimerMode.STOPWATCH
-                "COUNTDOWN" -> selectedTimerMode = FocusTimerMode.COUNTDOWN
-            }
+    val selectedTimerMode = remember(savedModeName) {
+        when (savedModeName) {
+            "STOPWATCH" -> FocusTimerMode.STOPWATCH
+            "COUNTDOWN" -> FocusTimerMode.COUNTDOWN
+            else -> FocusTimerMode.POMODORO
+        }
+    }
+
+    val countdownState = modeStates["COUNTDOWN"]
+    var countdownTargetMinutes by rememberSaveable {
+        mutableIntStateOf(((countdownState?.targetDuration ?: (50 * 60L)) / 60L).toInt().coerceAtLeast(1))
+    }
+    LaunchedEffect(countdownState?.targetDuration) {
+        val mins = ((countdownState?.targetDuration ?: (50 * 60L)) / 60L).toInt()
+        if (mins > 0 && countdownTargetMinutes != mins) {
+            countdownTargetMinutes = mins
         }
     }
 
@@ -369,6 +397,8 @@ fun TimerTabContent(
                     ) {
                         FocusTimerMode.values().forEach { mode ->
                             val isSelected = selectedTimerMode == mode
+                            val tabState = modeStates[mode.name]
+                            val isTabRunningInBackground = !isSelected && tabState?.isRunning == true
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isSelected) Color.White else Color.Transparent,
@@ -377,20 +407,22 @@ fun TimerTabContent(
                                     .weight(1f)
                                     .clickable {
                                         if (selectedTimerMode != mode) {
-                                            selectedTimerMode = mode
-                                            TimerService.resetTimer(context)
+                                            savedModeName = mode.name
+                                            TimerService.selectMode(context, mode.name)
                                         }
                                     }
                             ) {
                                 Text(
-                                    text = mode.label,
+                                    text = if (isTabRunningInBackground) "${mode.label} ●" else mode.label,
                                     style = Typography.labelMedium.copy(
                                         color = if (isSelected) {
                                             Color.Black.copy(alpha = 0.87f)
+                                        } else if (isTabRunningInBackground) {
+                                            if (isGlass) Color.White else accentColor
                                         } else {
                                             if (isGlass) Color.White.copy(alpha = 0.70f) else AppTheme.colors.textMuted
                                         },
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        fontWeight = if (isSelected || isTabRunningInBackground) FontWeight.Bold else FontWeight.Medium,
                                         fontSize = 13.sp
                                     ),
                                     textAlign = TextAlign.Center,
@@ -415,7 +447,10 @@ fun TimerTabContent(
                                 shape = RoundedCornerShape(8.dp),
                                 color = if (isChosen) accentColor else if (isGlass) Color.White.copy(alpha = 0.06f) else AppTheme.colors.surface2,
                                 border = BorderStroke(1.dp, if (isChosen) accentColor else if (isGlass) Color.White.copy(alpha = 0.12f) else AppTheme.colors.borderSoft),
-                                modifier = Modifier.clickable { countdownTargetMinutes = mins }
+                                modifier = Modifier.clickable {
+                                    countdownTargetMinutes = mins
+                                    TimerService.setCountdownTarget(context, mins * 60L)
+                                }
                             ) {
                                 Text(
                                     text = "${mins}m",
@@ -520,14 +555,14 @@ fun TimerTabContent(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Reset Button
+                    // Reset Button (Resets current mode only; does not save a session)
                     Surface(
                         shape = CircleShape,
                         color = AppTheme.colors.surface2,
                         modifier = Modifier
                             .size(52.dp)
                             .clickable {
-                                TimerService.resetTimer(context)
+                                TimerService.resetTimer(context, selectedTimerMode.name)
                             }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
@@ -552,11 +587,7 @@ fun TimerTabContent(
                             .clickable {
                                 if (!isRunning) {
                                     if (activeHabit != null) {
-                                        val modeStr = when (selectedTimerMode) {
-                                            FocusTimerMode.POMODORO -> "POMODORO"
-                                            FocusTimerMode.STOPWATCH -> "STOPWATCH"
-                                            FocusTimerMode.COUNTDOWN -> "COUNTDOWN"
-                                        }
+                                        val modeStr = selectedTimerMode.name
                                         val targetSec = when (selectedTimerMode) {
                                             FocusTimerMode.POMODORO -> currentPomodoroTarget
                                             FocusTimerMode.COUNTDOWN -> countdownTargetSeconds
@@ -571,7 +602,7 @@ fun TimerTabContent(
                                         )
                                     }
                                 } else {
-                                    TimerService.pauseTimer(context)
+                                    TimerService.pauseTimer(context, selectedTimerMode.name)
                                 }
                             }
                     ) {
@@ -604,7 +635,7 @@ fun TimerTabContent(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    // Right Save/Log Button
+                    // Right Stop/Save Session Button
                     Surface(
                         shape = CircleShape,
                         color = if (elapsedSeconds > 0) accentColor else AppTheme.colors.surface2,
@@ -614,7 +645,7 @@ fun TimerTabContent(
                                 val sessionTime = elapsedSeconds
                                 if (activeHabit != null && sessionTime > 0) {
                                     viewModel.saveTimeSession(activeHabit.id, sessionTime, sessionId = System.currentTimeMillis())
-                                    TimerService.stopTimer(context)
+                                    TimerService.stopTimer(context, selectedTimerMode.name)
                                 }
                             }
                     ) {
@@ -645,7 +676,7 @@ fun TimerTabContent(
                                 .clickable {
                                     if (activeHabit != null && elapsedSeconds > 0) {
                                         viewModel.saveTimeSession(activeHabit.id, elapsedSeconds, sessionId = System.currentTimeMillis())
-                                        TimerService.stopTimer(context)
+                                        TimerService.stopTimer(context, selectedTimerMode.name)
                                     }
                                 }
                         ) {
@@ -909,6 +940,7 @@ fun TimerTabContent(
         AlertDialog(
             onDismissRequest = { showHabitPicker = false },
             title = {
+                ConfigureDialogWindowBlur()
                 Text(
                     text = "Select Routine to Focus",
                     style = Typography.titleMedium.copy(
@@ -987,7 +1019,7 @@ fun TimerTabContent(
                     Text("Close", color = accentColor, fontWeight = FontWeight.Bold)
                 }
             },
-            containerColor = AppTheme.colors.surface,
+            containerColor = frostedDialogContainerColor(),
             shape = RoundedCornerShape(18.dp)
         )
     }
@@ -1004,6 +1036,7 @@ fun TimerTabContent(
                 TimerService.consumePendingSession(context, currentPending.id)
             },
             title = {
+                ConfigureDialogWindowBlur()
                 Text(
                     text = "🎉 Session Complete!",
                     style = Typography.titleMedium.copy(
@@ -1043,7 +1076,7 @@ fun TimerTabContent(
                     Text("Dismiss", color = AppTheme.colors.textMuted)
                 }
             },
-            containerColor = AppTheme.colors.surface,
+            containerColor = frostedDialogContainerColor(),
             shape = RoundedCornerShape(18.dp)
         )
     }

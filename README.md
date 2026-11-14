@@ -158,12 +158,7 @@ git clone https://github.com/redeus12/rudeus-habit-tracker-pro.git
 cd rudeus-habit-tracker-pro
 ```
 
-### 2. Configure Environment File
-```bash
-cp .env.example .env
-```
-
-### 3. Build the Debug APK via CLI
+### 2. Build the Debug APK via CLI
 ```bash
 # Linux / macOS
 chmod +x ./gradlew
@@ -177,7 +172,7 @@ The compiled APK will be generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### 4. Run Unit Tests
+### 3. Run Unit Tests
 ```bash
 ./gradlew testDebugUnitTest
 ```

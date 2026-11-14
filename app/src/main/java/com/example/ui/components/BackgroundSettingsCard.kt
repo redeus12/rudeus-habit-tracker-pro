@@ -78,9 +78,12 @@ fun BackgroundSettingsCard(
     if (wallpaperToDelete != null) {
         AlertDialog(
             onDismissRequest = { wallpaperToDelete = null },
-            title = { Text("Remove Wallpaper", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Remove this wallpaper from your rotation library?", color = Color.White.copy(alpha = 0.85f)) },
-            containerColor = Color(0xFF1E2421),
+            title = {
+                ConfigureDialogWindowBlur()
+                Text("Remove Wallpaper", color = AppTheme.colors.text, fontWeight = FontWeight.Bold)
+            },
+            text = { Text("Remove this wallpaper from your rotation library?", color = AppTheme.colors.textMuted) },
+            containerColor = frostedDialogContainerColor(),
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -97,7 +100,7 @@ fun BackgroundSettingsCard(
             },
             dismissButton = {
                 TextButton(onClick = { wallpaperToDelete = null }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    Text("Cancel", color = AppTheme.colors.textMuted)
                 }
             }
         )
@@ -107,9 +110,12 @@ fun BackgroundSettingsCard(
     if (showDeleteAllDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteAllDialog = false },
-            title = { Text("Reset Wallpapers", color = Color.White, fontWeight = FontWeight.Bold) },
-            text = { Text("Remove all custom wallpapers and return to the default theme?", color = Color.White.copy(alpha = 0.85f)) },
-            containerColor = Color(0xFF1E2421),
+            title = {
+                ConfigureDialogWindowBlur()
+                Text("Reset Wallpapers", color = AppTheme.colors.text, fontWeight = FontWeight.Bold)
+            },
+            text = { Text("Remove all custom wallpapers and return to the default theme?", color = AppTheme.colors.textMuted) },
+            containerColor = frostedDialogContainerColor(),
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -123,7 +129,7 @@ fun BackgroundSettingsCard(
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteAllDialog = false }) {
-                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                    Text("Cancel", color = AppTheme.colors.textMuted)
                 }
             }
         )

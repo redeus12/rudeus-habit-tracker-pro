@@ -37,14 +37,18 @@ class TimerWidgetProvider : AppWidgetProvider() {
             appWidgetManager: AppWidgetManager,
             appWidgetIds: IntArray
         ) {
-            val isRunning = TimerService.isRunning.value
-            val isPaused = TimerService.isPaused.value
+            val now = System.currentTimeMillis()
+            val displayState = TimerService.getDisplayModeState(now)
+            val isRunning = displayState.isRunning
+            val isPaused = displayState.isPaused
             val habitId = TimerService.activeHabitId.value
             val habitName = TimerService.activeHabitName.value
-            val elapsedSeconds = TimerService.elapsedSeconds.value
+            val elapsedSeconds = displayState.computeElapsedSeconds(now)
             val trackName = TimerService.currentTrackName.value
+            val modeBadge = TimerService.formatModeBadge(displayState)
+            val timeStr = TimerService.formatModeTime(displayState, now)
 
-            Log.d("TimerWidgetProvider", "Updating timer widget. isRunning=$isRunning, isPaused=$isPaused, habit=$habitName, elapsed=$elapsedSeconds, track=$trackName")
+            Log.d("TimerWidgetProvider", "Updating timer widget. mode=${displayState.mode}, isRunning=$isRunning, isPaused=$isPaused, habit=$habitName, elapsed=$elapsedSeconds, track=$trackName")
 
             appWidgetIds.forEach { widgetId ->
                 val views = RemoteViews(context.packageName, R.layout.widget_timer)
@@ -54,18 +58,11 @@ class TimerWidgetProvider : AppWidgetProvider() {
                     views.setViewVisibility(R.id.widget_timer_active_layout, View.VISIBLE)
                     views.setViewVisibility(R.id.widget_timer_idle_layout, View.GONE)
 
-                    // Set Habit Name
-                    views.setTextViewText(R.id.widget_timer_habit_name, habitName ?: "Active Habit")
+                    // Set Habit Name + Mode Badge
+                    val headerText = "${habitName ?: "Active Habit"} • $modeBadge"
+                    views.setTextViewText(R.id.widget_timer_habit_name, headerText)
 
-                    // Set Elapsed Time (MM:SS)
-                    val hours = elapsedSeconds / 3600
-                    val minutes = (elapsedSeconds % 3600) / 60
-                    val secs = elapsedSeconds % 60
-                    val timeStr = if (hours > 0) {
-                        String.format("%02d:%02d:%02d", hours, minutes, secs)
-                    } else {
-                        String.format("%02d:%02d", minutes, secs)
-                    }
+                    // Set Consistent Formatted Time (Remaining for Pomodoro/Countdown, Elapsed for Stopwatch)
                     views.setTextViewText(R.id.widget_timer_elapsed_time, timeStr)
 
                     // Set Track Name
@@ -86,8 +83,11 @@ class TimerWidgetProvider : AppWidgetProvider() {
                             action = TimerService.ACTION_START
                             putExtra(TimerService.EXTRA_HABIT_ID, habitId)
                             putExtra(TimerService.EXTRA_HABIT_NAME, habitName)
+                            putExtra(TimerService.EXTRA_TIMER_MODE, displayState.mode)
+                            putExtra(TimerService.EXTRA_TARGET_SECONDS, displayState.targetDuration)
                         } else {
                             action = TimerService.ACTION_PAUSE
+                            putExtra(TimerService.EXTRA_TIMER_MODE, displayState.mode)
                         }
                     }
                     
@@ -120,6 +120,8 @@ class TimerWidgetProvider : AppWidgetProvider() {
                     // Configure Stop PendingIntent
                     val stopIntent = Intent(context, TimerService::class.java).apply {
                         action = TimerService.ACTION_STOP
+                        putExtra(TimerService.EXTRA_TIMER_MODE, displayState.mode)
+                        putExtra(TimerService.EXTRA_SAVE_SESSION, true)
                     }
                     val stopPendingIntent = PendingIntent.getService(
                         context,

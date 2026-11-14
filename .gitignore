@@ -8,11 +8,8 @@ captures/
 .externalNativeBuild/
 .cxx/
 
-# Local Configuration & Secrets
+# Local Configuration
 local.properties
-.env
-.env.*
-!.env.example
 
 # Keystores
 *.jks

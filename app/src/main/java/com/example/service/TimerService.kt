@@ -36,6 +36,33 @@ data class PendingSession(
     val completedAt: Long
 )
 
+data class ModeTimerState(
+    val mode: String,
+    val targetDuration: Long = defaultTargetForMode(mode),
+    val baseElapsedSeconds: Long = 0L,
+    val startedAtMillis: Long = 0L,
+    val isRunning: Boolean = false,
+    val isPaused: Boolean = false,
+    val pomodoroRound: Int = 1,
+    val isPomodoroBreak: Boolean = false
+) {
+    fun computeElapsedSeconds(nowMillis: Long = System.currentTimeMillis()): Long {
+        return if (isRunning && startedAtMillis > 0L) {
+            baseElapsedSeconds + ((nowMillis - startedAtMillis) / 1000L).coerceAtLeast(0L)
+        } else {
+            baseElapsedSeconds
+        }
+    }
+
+    companion object {
+        fun defaultTargetForMode(mode: String): Long = when (mode) {
+            "POMODORO" -> 25 * 60L
+            "COUNTDOWN" -> 50 * 60L
+            else -> 0L
+        }
+    }
+}
+
 class TimerService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
@@ -55,6 +82,7 @@ class TimerService : Service() {
         const val ACTION_PAUSE = "ACTION_PAUSE"
         const val ACTION_STOP = "ACTION_STOP"
         const val ACTION_RESET = "ACTION_RESET"
+        const val ACTION_SELECT_MODE = "ACTION_SELECT_MODE"
         const val ACTION_CHANGE_HABIT = "ACTION_CHANGE_HABIT"
         const val ACTION_NEXT_TRACK = "ACTION_NEXT_TRACK"
         const val ACTION_PREVIOUS_TRACK = "ACTION_PREVIOUS_TRACK"
@@ -68,8 +96,20 @@ class TimerService : Service() {
         const val EXTRA_TIMER_MODE = "EXTRA_TIMER_MODE"
         const val EXTRA_TARGET_SECONDS = "EXTRA_TARGET_SECONDS"
         const val EXTRA_IS_RESTORE = "EXTRA_IS_RESTORE"
+        const val EXTRA_SAVE_SESSION = "EXTRA_SAVE_SESSION"
 
-        // State observable from UI
+        val ALL_MODES = listOf("POMODORO", "STOPWATCH", "COUNTDOWN")
+
+        fun defaultModeStates(): Map<String, ModeTimerState> = mapOf(
+            "POMODORO" to ModeTimerState("POMODORO"),
+            "STOPWATCH" to ModeTimerState("STOPWATCH"),
+            "COUNTDOWN" to ModeTimerState("COUNTDOWN")
+        )
+
+        // Per-mode independent states
+        val modeStates = MutableStateFlow<Map<String, ModeTimerState>>(defaultModeStates())
+
+        // State observable from UI (always reflects activeMode's ModeTimerState)
         val activeHabitId = MutableStateFlow<String?>(null)
         val activeHabitName = MutableStateFlow<String?>(null)
         val activeMode = MutableStateFlow("POMODORO") // "POMODORO", "STOPWATCH", "COUNTDOWN"
@@ -110,11 +150,218 @@ class TimerService : Service() {
         private const val KEY_PENDING_MODE = "pending_mode"
         private const val KEY_PENDING_COMPLETED_AT = "pending_completed_at"
 
+        private fun modePrefKey(mode: String, field: String): String = "mode_${mode}_$field"
+
+        fun getModeState(mode: String): ModeTimerState {
+            return modeStates.value[mode] ?: ModeTimerState(mode)
+        }
+
+        fun anyModeRunning(): Boolean = modeStates.value.values.any { it.isRunning }
+
+        fun anyModeActive(): Boolean = modeStates.value.values.any { it.isRunning || it.isPaused }
+
+        fun getDisplayModeState(nowMillis: Long = System.currentTimeMillis()): ModeTimerState {
+            val current = getModeState(activeMode.value)
+            if (current.isRunning || current.isPaused) return current
+            val running = modeStates.value.values.firstOrNull { it.isRunning }
+            if (running != null) return running
+            val paused = modeStates.value.values.firstOrNull { it.isPaused }
+            if (paused != null) return paused
+            return current
+        }
+
+        fun formatModeTime(state: ModeTimerState, nowMillis: Long = System.currentTimeMillis()): String {
+            val seconds = state.computeElapsedSeconds(nowMillis)
+            return when (state.mode) {
+                "COUNTDOWN", "POMODORO" -> {
+                    val rem = (state.targetDuration - seconds).coerceAtLeast(0L)
+                    val hours = rem / 3600
+                    val minutes = (rem % 3600) / 60
+                    val secs = rem % 60
+                    if (hours > 0) {
+                        String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, secs)
+                    } else {
+                        String.format(java.util.Locale.US, "%02d:%02d", minutes, secs)
+                    }
+                }
+                else -> {
+                    val hours = seconds / 3600
+                    val minutes = (seconds % 3600) / 60
+                    val secs = seconds % 60
+                    if (hours > 0) {
+                        String.format(java.util.Locale.US, "%02d:%02d:%02d", hours, minutes, secs)
+                    } else {
+                        String.format(java.util.Locale.US, "%02d:%02d", minutes, secs)
+                    }
+                }
+            }
+        }
+
+        fun formatModeBadge(state: ModeTimerState): String = when (state.mode) {
+            "POMODORO" -> if (state.isPomodoroBreak) "Break" else "Pomodoro"
+            "COUNTDOWN" -> "Countdown"
+            "STOPWATCH" -> "Stopwatch"
+            else -> state.mode
+        }
+
+        fun syncActiveModeFlows(nowMillis: Long = System.currentTimeMillis()) {
+            val mode = activeMode.value
+            val state = getModeState(mode)
+            targetDuration.value = state.targetDuration
+            baseElapsedSeconds = state.baseElapsedSeconds
+            startedAtMillis = state.startedAtMillis
+            elapsedSeconds.value = state.computeElapsedSeconds(nowMillis)
+            isRunning.value = state.isRunning
+            isPaused.value = state.isPaused
+            pomodoroRound.value = state.pomodoroRound
+            isPomodoroBreak.value = state.isPomodoroBreak
+        }
+
         fun computeElapsedSeconds(nowMillis: Long = System.currentTimeMillis()): Long {
+            val state = modeStates.value[activeMode.value]
+            if (state != null && (state.isRunning || state.isPaused || state.baseElapsedSeconds > 0L || state.startedAtMillis > 0L)) {
+                return state.computeElapsedSeconds(nowMillis)
+            }
             return if (startedAtMillis > 0L) {
                 baseElapsedSeconds + ((nowMillis - startedAtMillis) / 1000L).coerceAtLeast(0L)
             } else {
                 baseElapsedSeconds
+            }
+        }
+
+        fun applySelectMode(mode: String, nowMillis: Long = System.currentTimeMillis()) {
+            if (mode !in ALL_MODES) return
+            if (!modeStates.value.containsKey(mode)) {
+                modeStates.value = modeStates.value + (mode to ModeTimerState(mode))
+            }
+            activeMode.value = mode
+            syncActiveModeFlows(nowMillis)
+        }
+
+        fun applyStartMode(
+            habitId: String,
+            habitName: String,
+            mode: String,
+            targetSeconds: Long,
+            nowMillis: Long = System.currentTimeMillis()
+        ): Boolean {
+            val current = getModeState(mode)
+            val wasPaused = current.isPaused
+            val nextTarget = if (targetSeconds > 0L) targetSeconds else current.targetDuration
+
+            val updated = when {
+                current.isPaused -> {
+                    current.copy(
+                        targetDuration = nextTarget,
+                        startedAtMillis = nowMillis,
+                        isRunning = true,
+                        isPaused = false
+                    )
+                }
+                current.isRunning -> {
+                    current.copy(targetDuration = nextTarget)
+                }
+                else -> {
+                    current.copy(
+                        targetDuration = nextTarget,
+                        baseElapsedSeconds = 0L,
+                        startedAtMillis = nowMillis,
+                        isRunning = true,
+                        isPaused = false
+                    )
+                }
+            }
+
+            if (habitId.isNotBlank()) {
+                activeHabitId.value = habitId
+                activeHabitName.value = habitName
+            }
+            activeMode.value = mode
+            modeStates.value = modeStates.value + (mode to updated)
+            syncActiveModeFlows(nowMillis)
+            return wasPaused
+        }
+
+        fun applyPauseMode(mode: String = activeMode.value, nowMillis: Long = System.currentTimeMillis()) {
+            val current = getModeState(mode)
+            if (!current.isRunning && !current.isPaused) return
+            val elapsed = current.computeElapsedSeconds(nowMillis)
+            val updated = current.copy(
+                baseElapsedSeconds = elapsed,
+                startedAtMillis = 0L,
+                isRunning = false,
+                isPaused = true
+            )
+            modeStates.value = modeStates.value + (mode to updated)
+            syncActiveModeFlows(nowMillis)
+        }
+
+        fun applyResetMode(mode: String = activeMode.value, nowMillis: Long = System.currentTimeMillis()) {
+            val current = getModeState(mode)
+            val updated = if (mode == "POMODORO") {
+                current.copy(
+                    targetDuration = 25 * 60L,
+                    baseElapsedSeconds = 0L,
+                    startedAtMillis = 0L,
+                    isRunning = false,
+                    isPaused = false,
+                    pomodoroRound = 1,
+                    isPomodoroBreak = false
+                )
+            } else {
+                current.copy(
+                    baseElapsedSeconds = 0L,
+                    startedAtMillis = 0L,
+                    isRunning = false,
+                    isPaused = false
+                )
+            }
+            modeStates.value = modeStates.value + (mode to updated)
+            syncActiveModeFlows(nowMillis)
+        }
+
+        fun applyStopMode(mode: String = activeMode.value, nowMillis: Long = System.currentTimeMillis()): Long {
+            val current = getModeState(mode)
+            val elapsed = current.computeElapsedSeconds(nowMillis)
+            val resetState = if (mode == "POMODORO") {
+                current.copy(
+                    targetDuration = 25 * 60L,
+                    baseElapsedSeconds = 0L,
+                    startedAtMillis = 0L,
+                    isRunning = false,
+                    isPaused = false,
+                    pomodoroRound = 1,
+                    isPomodoroBreak = false
+                )
+            } else {
+                current.copy(
+                    baseElapsedSeconds = 0L,
+                    startedAtMillis = 0L,
+                    isRunning = false,
+                    isPaused = false
+                )
+            }
+            modeStates.value = modeStates.value + (mode to resetState)
+
+            val otherActive = modeStates.value.values.firstOrNull { it.mode != mode && (it.isRunning || it.isPaused) }
+            if (otherActive == null) {
+                activeHabitId.value = null
+                activeHabitName.value = null
+            }
+            syncActiveModeFlows(nowMillis)
+            return elapsed
+        }
+
+        fun setCountdownTarget(context: Context?, targetSeconds: Long) {
+            if (targetSeconds <= 0L) return
+            val current = getModeState("COUNTDOWN")
+            if (!current.isRunning && !current.isPaused) {
+                val updated = current.copy(targetDuration = targetSeconds, baseElapsedSeconds = 0L, startedAtMillis = 0L)
+                modeStates.value = modeStates.value + ("COUNTDOWN" to updated)
+                syncActiveModeFlows()
+                if (context != null) {
+                    saveTimerState(context)
+                }
             }
         }
 
@@ -152,37 +399,51 @@ class TimerService : Service() {
         }
 
         fun saveTimerState(context: Context) {
+            val now = System.currentTimeMillis()
+            val activeState = getModeState(activeMode.value)
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             prefs.edit().apply {
                 putString(KEY_HABIT_ID, activeHabitId.value)
                 putString(KEY_HABIT_NAME, activeHabitName.value)
                 putString(KEY_MODE, activeMode.value)
-                putLong(KEY_TARGET_DURATION, targetDuration.value)
-                putInt(KEY_POMODORO_ROUND, pomodoroRound.value)
-                putBoolean(KEY_IS_BREAK, isPomodoroBreak.value)
-                putLong(KEY_BASE_ELAPSED_SECONDS, baseElapsedSeconds)
-                putLong(KEY_STARTED_AT_MILLIS, startedAtMillis)
-                putBoolean(KEY_IS_RUNNING, isRunning.value)
-                putBoolean(KEY_IS_PAUSED, isPaused.value)
-                putLong(KEY_LAST_UPDATED_TIME, System.currentTimeMillis())
+                putLong(KEY_TARGET_DURATION, activeState.targetDuration)
+                putInt(KEY_POMODORO_ROUND, activeState.pomodoroRound)
+                putBoolean(KEY_IS_BREAK, activeState.isPomodoroBreak)
+                putLong(KEY_BASE_ELAPSED_SECONDS, activeState.baseElapsedSeconds)
+                putLong(KEY_STARTED_AT_MILLIS, activeState.startedAtMillis)
+                putBoolean(KEY_IS_RUNNING, activeState.isRunning)
+                putBoolean(KEY_IS_PAUSED, activeState.isPaused)
+                putLong(KEY_LAST_UPDATED_TIME, now)
                 putString(KEY_LAST_COMPLETED_PHASE_KEY, lastCompletedPhaseKey)
+                putBoolean("has_per_mode_state", true)
+
+                for (mode in ALL_MODES) {
+                    val mState = getModeState(mode)
+                    putLong(modePrefKey(mode, KEY_TARGET_DURATION), mState.targetDuration)
+                    putLong(modePrefKey(mode, KEY_BASE_ELAPSED_SECONDS), mState.baseElapsedSeconds)
+                    putLong(modePrefKey(mode, KEY_STARTED_AT_MILLIS), mState.startedAtMillis)
+                    putBoolean(modePrefKey(mode, KEY_IS_RUNNING), mState.isRunning)
+                    putBoolean(modePrefKey(mode, KEY_IS_PAUSED), mState.isPaused)
+                    putInt(modePrefKey(mode, KEY_POMODORO_ROUND), mState.pomodoroRound)
+                    putBoolean(modePrefKey(mode, KEY_IS_BREAK), mState.isPomodoroBreak)
+                }
                 apply()
             }
         }
 
         fun restoreTimerState(context: Context) {
-            if (restoredThisProcess || isRunning.value || isPaused.value) {
+            if (restoredThisProcess || anyModeActive()) {
                 return
             }
             restoredThisProcess = true
 
             val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val now = System.currentTimeMillis()
 
             // Restore pending session if within 12 hours
             val pendingId = prefs.getLong(KEY_PENDING_ID, 0L)
             if (pendingId > 0L) {
                 val completedAt = prefs.getLong(KEY_PENDING_COMPLETED_AT, 0L)
-                val now = System.currentTimeMillis()
                 if (completedAt > 0L && (now - completedAt) <= 12 * 3600 * 1000L) {
                     val habitId = prefs.getString(KEY_PENDING_HABIT_ID, "") ?: ""
                     val habitName = prefs.getString(KEY_PENDING_HABIT_NAME, "") ?: ""
@@ -204,101 +465,189 @@ class TimerService : Service() {
 
             val savedHabitId = prefs.getString(KEY_HABIT_ID, null)
             val savedHabitName = prefs.getString(KEY_HABIT_NAME, null)
-            val savedMode = prefs.getString(KEY_MODE, "POMODORO") ?: "POMODORO"
-            val savedTarget = prefs.getLong(KEY_TARGET_DURATION, 25 * 60L)
-            val savedRound = prefs.getInt(KEY_POMODORO_ROUND, 1)
-            val savedIsBreak = prefs.getBoolean(KEY_IS_BREAK, false)
-            val savedIsRunning = prefs.getBoolean(KEY_IS_RUNNING, false)
-            val savedIsPaused = prefs.getBoolean(KEY_IS_PAUSED, false)
-            val savedBase = prefs.getLong(KEY_BASE_ELAPSED_SECONDS, 0L)
-            val savedStartedAt = prefs.getLong(KEY_STARTED_AT_MILLIS, 0L)
+            val savedMode = (prefs.getString(KEY_MODE, "POMODORO") ?: "POMODORO").let {
+                if (it in ALL_MODES) it else "POMODORO"
+            }
             lastCompletedPhaseKey = prefs.getString(KEY_LAST_COMPLETED_PHASE_KEY, null)
 
-            if (savedHabitId == null || (!savedIsRunning && !savedIsPaused)) {
-                return
-            }
-
-            activeHabitId.value = savedHabitId
-            activeHabitName.value = savedHabitName
+            // Always restore the user's last selected mode so it survives process restore & app restart
             activeMode.value = savedMode
-            targetDuration.value = savedTarget
-            pomodoroRound.value = savedRound
-            isPomodoroBreak.value = savedIsBreak
 
-            if (savedIsPaused) {
-                baseElapsedSeconds = savedBase
-                startedAtMillis = 0L
-                elapsedSeconds.value = savedBase
-                isRunning.value = false
-                isPaused.value = true
-                return
+            val hasPerModeState = prefs.getBoolean("has_per_mode_state", false)
+            val restoredMap = mutableMapOf<String, ModeTimerState>()
+            var phaseCompletedWhileAway = false
+
+            for (mode in ALL_MODES) {
+                val defaultTarget = ModeTimerState.defaultTargetForMode(mode)
+                val useLegacyFallback = !hasPerModeState && mode == savedMode
+
+                val mTarget = if (hasPerModeState && prefs.contains(modePrefKey(mode, KEY_TARGET_DURATION))) {
+                    prefs.getLong(modePrefKey(mode, KEY_TARGET_DURATION), defaultTarget)
+                } else if (useLegacyFallback) {
+                    prefs.getLong(KEY_TARGET_DURATION, defaultTarget)
+                } else {
+                    defaultTarget
+                }
+
+                val mBase = if (hasPerModeState) {
+                    prefs.getLong(modePrefKey(mode, KEY_BASE_ELAPSED_SECONDS), 0L)
+                } else if (useLegacyFallback) {
+                    prefs.getLong(KEY_BASE_ELAPSED_SECONDS, 0L)
+                } else {
+                    0L
+                }
+
+                val mStartedAt = if (hasPerModeState) {
+                    prefs.getLong(modePrefKey(mode, KEY_STARTED_AT_MILLIS), 0L)
+                } else if (useLegacyFallback) {
+                    prefs.getLong(KEY_STARTED_AT_MILLIS, 0L)
+                } else {
+                    0L
+                }
+
+                val mRunning = if (hasPerModeState) {
+                    prefs.getBoolean(modePrefKey(mode, KEY_IS_RUNNING), false)
+                } else if (useLegacyFallback) {
+                    prefs.getBoolean(KEY_IS_RUNNING, false)
+                } else {
+                    false
+                }
+
+                val mPaused = if (hasPerModeState) {
+                    prefs.getBoolean(modePrefKey(mode, KEY_IS_PAUSED), false)
+                } else if (useLegacyFallback) {
+                    prefs.getBoolean(KEY_IS_PAUSED, false)
+                } else {
+                    false
+                }
+
+                val mRound = if (hasPerModeState) {
+                    prefs.getInt(modePrefKey(mode, KEY_POMODORO_ROUND), 1)
+                } else if (useLegacyFallback) {
+                    prefs.getInt(KEY_POMODORO_ROUND, 1)
+                } else {
+                    1
+                }
+
+                val mBreak = if (hasPerModeState) {
+                    prefs.getBoolean(modePrefKey(mode, KEY_IS_BREAK), false)
+                } else if (useLegacyFallback) {
+                    prefs.getBoolean(KEY_IS_BREAK, false)
+                } else {
+                    false
+                }
+
+                if (savedHabitId == null || (!mRunning && !mPaused)) {
+                    restoredMap[mode] = ModeTimerState(
+                        mode = mode,
+                        targetDuration = mTarget,
+                        pomodoroRound = mRound,
+                        isPomodoroBreak = mBreak
+                    )
+                } else if (mPaused) {
+                    restoredMap[mode] = ModeTimerState(
+                        mode = mode,
+                        targetDuration = mTarget,
+                        baseElapsedSeconds = mBase,
+                        startedAtMillis = 0L,
+                        isRunning = false,
+                        isPaused = true,
+                        pomodoroRound = mRound,
+                        isPomodoroBreak = mBreak
+                    )
+                } else {
+                    val elapsed = if (mStartedAt > 0L) {
+                        mBase + ((now - mStartedAt) / 1000L).coerceAtLeast(0L)
+                    } else {
+                        mBase
+                    }
+                    if (mode != "STOPWATCH" && mTarget > 0L && elapsed >= mTarget) {
+                        phaseCompletedWhileAway = true
+                        val completedAt = if (mStartedAt > 0L) mStartedAt + (mTarget - mBase) * 1000L else now
+                        val isWithin12Hours = (now - completedAt) <= 12 * 3600 * 1000L
+                        val isFocusPhase = (mode == "COUNTDOWN") || (mode == "POMODORO" && !mBreak)
+                        val phaseKey = "$mode|${if (mBreak) "break" else "focus"}|$mRound|$mStartedAt"
+
+                        if (isFocusPhase && isWithin12Hours && lastCompletedPhaseKey != phaseKey) {
+                            lastCompletedPhaseKey = phaseKey
+                            val session = PendingSession(
+                                id = completedAt,
+                                habitId = savedHabitId,
+                                habitName = savedHabitName ?: "",
+                                seconds = mTarget,
+                                mode = mode,
+                                completedAt = completedAt
+                            )
+                            pendingSession.value = session
+                            savePendingSession(context, session)
+                            prefs.edit().putString(KEY_LAST_COMPLETED_PHASE_KEY, phaseKey).apply()
+                        }
+
+                        if (mode == "POMODORO") {
+                            val nextBreak = !mBreak
+                            val nextRound = if (!mBreak) mRound else if (mRound >= 4) 1 else mRound + 1
+                            val nextTarget = if (nextBreak) {
+                                if (mRound < 4) 5 * 60L else 15 * 60L
+                            } else {
+                                25 * 60L
+                            }
+                            restoredMap[mode] = ModeTimerState(
+                                mode = mode,
+                                targetDuration = nextTarget,
+                                baseElapsedSeconds = 0L,
+                                startedAtMillis = 0L,
+                                isRunning = false,
+                                isPaused = false,
+                                pomodoroRound = nextRound,
+                                isPomodoroBreak = nextBreak
+                            )
+                        } else {
+                            restoredMap[mode] = ModeTimerState(
+                                mode = mode,
+                                targetDuration = mTarget,
+                                baseElapsedSeconds = mTarget,
+                                startedAtMillis = 0L,
+                                isRunning = false,
+                                isPaused = false
+                            )
+                        }
+                    } else {
+                        restoredMap[mode] = ModeTimerState(
+                            mode = mode,
+                            targetDuration = mTarget,
+                            baseElapsedSeconds = mBase,
+                            startedAtMillis = mStartedAt,
+                            isRunning = true,
+                            isPaused = false,
+                            pomodoroRound = mRound,
+                            isPomodoroBreak = mBreak
+                        )
+                    }
+                }
             }
 
-            // Running state
-            val now = System.currentTimeMillis()
-            val elapsed = if (savedStartedAt > 0L) savedBase + ((now - savedStartedAt) / 1000L).coerceAtLeast(0L) else savedBase
+            modeStates.value = restoredMap
 
-            if (savedMode != "STOPWATCH" && savedTarget > 0L && elapsed >= savedTarget) {
-                // Phase ended while app was away
-                val completedAt = if (savedStartedAt > 0L) savedStartedAt + (savedTarget - savedBase) * 1000L else now
-                val isWithin12Hours = (now - completedAt) <= 12 * 3600 * 1000L
-                val isFocusPhase = (savedMode == "COUNTDOWN") || (savedMode == "POMODORO" && !savedIsBreak)
-                val phaseKey = "$savedMode|${if (savedIsBreak) "break" else "focus"}|$savedRound|$savedStartedAt"
+            if (savedHabitId != null && (anyModeActive() || phaseCompletedWhileAway)) {
+                activeHabitId.value = savedHabitId
+                activeHabitName.value = savedHabitName
+            }
 
-                if (isFocusPhase && isWithin12Hours) {
-                    if (lastCompletedPhaseKey != phaseKey) {
-                        lastCompletedPhaseKey = phaseKey
-                        val session = PendingSession(
-                            id = completedAt,
-                            habitId = savedHabitId,
-                            habitName = savedHabitName ?: "",
-                            seconds = savedTarget,
-                            mode = savedMode,
-                            completedAt = completedAt
-                        )
-                        pendingSession.value = session
-                        savePendingSession(context, session)
-                        prefs.edit().putString(KEY_LAST_COMPLETED_PHASE_KEY, phaseKey).apply()
-                    }
-                }
+            syncActiveModeFlows(now)
 
-                if (savedMode == "POMODORO") {
-                    if (!savedIsBreak) {
-                        isPomodoroBreak.value = true
-                        targetDuration.value = if (savedRound < 4) 5 * 60L else 15 * 60L
-                    } else {
-                        isPomodoroBreak.value = false
-                        pomodoroRound.value = if (savedRound >= 4) 1 else savedRound + 1
-                        targetDuration.value = 25 * 60L
-                    }
-                    elapsedSeconds.value = 0L
-                    baseElapsedSeconds = 0L
-                    startedAtMillis = 0L
-                    isRunning.value = false
-                    isPaused.value = false
-                } else if (savedMode == "COUNTDOWN") {
-                    elapsedSeconds.value = savedTarget
-                    baseElapsedSeconds = savedTarget
-                    startedAtMillis = 0L
-                    isRunning.value = false
-                    isPaused.value = false
-                }
-
+            if (phaseCompletedWhileAway) {
                 saveTimerState(context)
                 TimerWidgetProvider.updateWidget(context)
-            } else {
-                baseElapsedSeconds = savedBase
-                startedAtMillis = savedStartedAt
-                elapsedSeconds.value = elapsed
-                isRunning.value = true
-                isPaused.value = false
+            }
 
+            if (savedHabitId != null && anyModeRunning()) {
+                val runningModeState = getDisplayModeState(now)
                 val intent = Intent(context, TimerService::class.java).apply {
                     action = ACTION_START
                     putExtra(EXTRA_HABIT_ID, savedHabitId)
                     putExtra(EXTRA_HABIT_NAME, savedHabitName)
-                    putExtra(EXTRA_TIMER_MODE, savedMode)
-                    putExtra(EXTRA_TARGET_SECONDS, savedTarget)
+                    putExtra(EXTRA_TIMER_MODE, runningModeState.mode)
+                    putExtra(EXTRA_TARGET_SECONDS, runningModeState.targetDuration)
                     putExtra(EXTRA_IS_RESTORE, true)
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -314,7 +663,6 @@ class TimerService : Service() {
             prefs.edit().apply {
                 remove(KEY_HABIT_ID)
                 remove(KEY_HABIT_NAME)
-                remove(KEY_MODE)
                 remove(KEY_TARGET_DURATION)
                 remove(KEY_POMODORO_ROUND)
                 remove(KEY_IS_BREAK)
@@ -323,7 +671,31 @@ class TimerService : Service() {
                 remove(KEY_IS_RUNNING)
                 remove(KEY_IS_PAUSED)
                 remove(KEY_LAST_UPDATED_TIME)
+                // Keep KEY_MODE so the user's selected mode persists across restarts
+                putString(KEY_MODE, activeMode.value)
+                for (mode in ALL_MODES) {
+                    remove(modePrefKey(mode, KEY_BASE_ELAPSED_SECONDS))
+                    remove(modePrefKey(mode, KEY_STARTED_AT_MILLIS))
+                    remove(modePrefKey(mode, KEY_IS_RUNNING))
+                    remove(modePrefKey(mode, KEY_IS_PAUSED))
+                    remove(modePrefKey(mode, KEY_POMODORO_ROUND))
+                    remove(modePrefKey(mode, KEY_IS_BREAK))
+                }
                 apply()
+            }
+        }
+
+        fun selectMode(context: Context, mode: String) {
+            if (mode !in ALL_MODES) return
+            applySelectMode(mode)
+            saveTimerState(context)
+            TimerWidgetProvider.updateWidget(context)
+            if (anyModeActive()) {
+                val intent = Intent(context, TimerService::class.java).apply {
+                    action = ACTION_SELECT_MODE
+                    putExtra(EXTRA_TIMER_MODE, mode)
+                }
+                context.startService(intent)
             }
         }
 
@@ -331,15 +703,23 @@ class TimerService : Service() {
             context: Context,
             habitId: String,
             habitName: String,
-            mode: String = "POMODORO",
-            targetSeconds: Long = 25 * 60L
+            mode: String = activeMode.value,
+            targetSeconds: Long = getModeState(mode).targetDuration
         ) {
+            val wasPaused = applyStartMode(
+                habitId = habitId,
+                habitName = habitName,
+                mode = mode,
+                targetSeconds = targetSeconds
+            )
+            saveTimerState(context)
             val intent = Intent(context, TimerService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_HABIT_ID, habitId)
                 putExtra(EXTRA_HABIT_NAME, habitName)
                 putExtra(EXTRA_TIMER_MODE, mode)
                 putExtra(EXTRA_TARGET_SECONDS, targetSeconds)
+                putExtra("EXTRA_WAS_PAUSED", wasPaused)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -359,39 +739,32 @@ class TimerService : Service() {
             context.startService(intent)
         }
 
-        fun pauseTimer(context: Context) {
-            val now = System.currentTimeMillis()
-            baseElapsedSeconds = computeElapsedSeconds(now)
-            startedAtMillis = 0L
-            elapsedSeconds.value = baseElapsedSeconds
-            isRunning.value = false
-            isPaused.value = true
+        fun pauseTimer(context: Context, mode: String = activeMode.value) {
+            applyPauseMode(mode)
+            saveTimerState(context)
             val intent = Intent(context, TimerService::class.java).apply {
                 action = ACTION_PAUSE
+                putExtra(EXTRA_TIMER_MODE, mode)
             }
             context.startService(intent)
         }
 
-        fun resetTimer(context: Context) {
-            isRunning.value = false
-            isPaused.value = false
-            baseElapsedSeconds = 0L
-            startedAtMillis = 0L
-            elapsedSeconds.value = 0L
+        fun resetTimer(context: Context, mode: String = activeMode.value) {
+            applyResetMode(mode)
+            saveTimerState(context)
             val intent = Intent(context, TimerService::class.java).apply {
                 action = ACTION_RESET
+                putExtra(EXTRA_TIMER_MODE, mode)
             }
             context.startService(intent)
         }
 
-        fun stopTimer(context: Context) {
-            isRunning.value = false
-            isPaused.value = false
-            baseElapsedSeconds = 0L
-            startedAtMillis = 0L
-            elapsedSeconds.value = 0L
+        fun stopTimer(context: Context, mode: String = activeMode.value) {
+            applyStopMode(mode)
+            saveTimerState(context)
             val intent = Intent(context, TimerService::class.java).apply {
                 action = ACTION_STOP
+                putExtra(EXTRA_TIMER_MODE, mode)
             }
             context.startService(intent)
         }
@@ -455,45 +828,37 @@ class TimerService : Service() {
         val action = intent?.action
         Log.d("TimerService", "onStartCommand action: $action")
         when (action) {
+            ACTION_SELECT_MODE -> {
+                val mode = intent.getStringExtra(EXTRA_TIMER_MODE) ?: activeMode.value
+                applySelectMode(mode)
+                saveTimerState(this)
+                if (anyModeActive()) {
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.notify(NOTIFICATION_ID, buildNotification())
+                }
+                TimerWidgetProvider.updateWidget(this)
+            }
             ACTION_START -> {
                 val isRestore = intent?.getBooleanExtra(EXTRA_IS_RESTORE, false) ?: false
                 val habitId = intent?.getStringExtra(EXTRA_HABIT_ID) ?: (activeHabitId.value ?: "")
                 val habitName = intent?.getStringExtra(EXTRA_HABIT_NAME) ?: (activeHabitName.value ?: "")
                 val mode = intent?.getStringExtra(EXTRA_TIMER_MODE) ?: activeMode.value
-                val target = intent?.getLongExtra(EXTRA_TARGET_SECONDS, targetDuration.value) ?: targetDuration.value
+                val defaultTarget = getModeState(mode).targetDuration
+                val target = intent?.getLongExtra(EXTRA_TARGET_SECONDS, defaultTarget) ?: defaultTarget
+                val wasPausedExtra = intent?.getBooleanExtra("EXTRA_WAS_PAUSED", false) ?: false
 
-                if (!isRestore) {
-                    val isNewHabit = activeHabitId.value != habitId
-                    val isNewMode = activeMode.value != mode
-                    val isResuming = isPaused.value && !isNewHabit && !isNewMode
-
-                    if (isNewHabit || isNewMode) {
-                        baseElapsedSeconds = 0L
-                        startedAtMillis = System.currentTimeMillis()
-                        elapsedSeconds.value = 0L
-                        if (isNewMode) {
-                            isPomodoroBreak.value = false
-                            pomodoroRound.value = 1
-                        }
-                    } else if (isResuming) {
-                        startedAtMillis = System.currentTimeMillis()
-                        elapsedSeconds.value = baseElapsedSeconds
-                    } else {
-                        baseElapsedSeconds = 0L
-                        startedAtMillis = System.currentTimeMillis()
-                        elapsedSeconds.value = 0L
-                    }
+                val wasPausedBeforeStart = if (!isRestore) {
+                    val pausedInState = applyStartMode(
+                        habitId = habitId,
+                        habitName = habitName,
+                        mode = mode,
+                        targetSeconds = target
+                    )
+                    wasPausedExtra || pausedInState
+                } else {
+                    syncActiveModeFlows()
+                    false
                 }
-                
-                activeHabitId.value = habitId
-                activeHabitName.value = habitName
-                activeMode.value = mode
-                if (target > 0L) {
-                    targetDuration.value = target
-                }
-                val wasPausedBeforeStart = isPaused.value
-                isRunning.value = true
-                isPaused.value = false
 
                 startForegroundCompat(buildNotification())
                 startTimerCoroutine()
@@ -522,7 +887,7 @@ class TimerService : Service() {
                                 } else {
                                     initializePlaylistAndPlay(currentIndex)
                                 }
-                            } else {
+                            } else if (mediaPlayer?.isPlaying != true) {
                                 initializePlaylistAndPlay(0)
                             }
                         }
@@ -543,22 +908,18 @@ class TimerService : Service() {
                 }
             }
             ACTION_PAUSE -> {
-                val now = System.currentTimeMillis()
-                if (startedAtMillis > 0L) {
-                    baseElapsedSeconds = computeElapsedSeconds(now)
-                    startedAtMillis = 0L
+                val mode = intent.getStringExtra(EXTRA_TIMER_MODE) ?: getDisplayModeState().mode
+                applyPauseMode(mode)
+                if (!anyModeRunning()) {
+                    stopTimerCoroutine()
                 }
-                elapsedSeconds.value = baseElapsedSeconds
-                isRunning.value = false
-                isPaused.value = true
-                stopTimerCoroutine()
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
                 startForegroundCompat(buildNotification())
                 saveTimerState(this)
                 TimerWidgetProvider.updateWidget(this)
 
-                if (PlaylistPreferences.autoPlayWithTimer.value) {
+                if (!anyModeRunning() && PlaylistPreferences.autoPlayWithTimer.value) {
                     when (PlaylistPreferences.musicSourceMode.value) {
                         MusicSourceMode.EXTERNAL -> {
                             if (MediaControlHelper.isMusicActive(this)) {
@@ -581,42 +942,71 @@ class TimerService : Service() {
                 }
             }
             ACTION_RESET -> {
-                stopTimerCoroutine()
-                isRunning.value = false
-                isPaused.value = false
-                baseElapsedSeconds = 0L
-                startedAtMillis = 0L
-                elapsedSeconds.value = 0L
+                val mode = intent.getStringExtra(EXTRA_TIMER_MODE) ?: activeMode.value
+                applyResetMode(mode)
+                if (!anyModeRunning()) {
+                    stopTimerCoroutine()
+                }
                 saveTimerState(this)
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 notificationManager.notify(NOTIFICATION_ID, buildNotification())
                 TimerWidgetProvider.updateWidget(this)
             }
             ACTION_STOP -> {
-                stopTimerCoroutine()
-                isRunning.value = false
-                isPaused.value = false
-                baseElapsedSeconds = 0L
-                startedAtMillis = 0L
-                activeHabitId.value = null
-                activeHabitName.value = null
-                elapsedSeconds.value = 0L
-                clearTimerState(this)
+                val mode = intent.getStringExtra(EXTRA_TIMER_MODE) ?: getDisplayModeState().mode
+                val saveSession = intent.getBooleanExtra(EXTRA_SAVE_SESSION, false)
+                val habitIdBeforeStop = activeHabitId.value
+                val stateBeforeStop = getModeState(mode)
+                val stoppedElapsed = applyStopMode(mode)
 
-                try {
-                    mediaPlayer?.stop()
-                } catch (e: Exception) {
-                    Log.e("TimerService", "Error stopping mediaPlayer", e)
-                } finally {
-                    mediaPlayer?.release()
-                    mediaPlayer = null
-                    currentTrackUri.value = null
-                    currentTrackName.value = null
-                    isMusicPlaying.value = false
+                if (saveSession && !habitIdBeforeStop.isNullOrBlank() && stoppedElapsed > 0L && !(mode == "POMODORO" && stateBeforeStop.isPomodoroBreak)) {
+                    val appCtx = applicationContext
+                    CoroutineScope(Dispatchers.IO).launch {
+                        try {
+                            val db = com.example.data.AppDatabase.getDatabase(appCtx)
+                            val today = com.example.util.DateUtils.todayStr()
+                            val existing = db.timeSessionDao().getSession(habitIdBeforeStop, today)
+                            val nextDuration = (existing?.durationSeconds ?: 0L) + stoppedElapsed
+                            db.timeSessionDao().insertSession(
+                                com.example.data.TimeSessionEntity(
+                                    habitId = habitIdBeforeStop,
+                                    date = today,
+                                    durationSeconds = nextDuration
+                                )
+                            )
+                            com.example.receiver.WidgetUpdateHelper.updateWidgets(appCtx)
+                        } catch (e: Exception) {
+                            Log.e("TimerService", "Error saving session on stop", e)
+                        }
+                    }
                 }
 
-                TimerWidgetProvider.updateWidget(this)
-                stopSelf()
+                if (!anyModeRunning()) {
+                    stopTimerCoroutine()
+                }
+
+                if (anyModeActive()) {
+                    saveTimerState(this)
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                    notificationManager.notify(NOTIFICATION_ID, buildNotification())
+                    TimerWidgetProvider.updateWidget(this)
+                } else {
+                    clearTimerState(this)
+                    try {
+                        mediaPlayer?.stop()
+                    } catch (e: Exception) {
+                        Log.e("TimerService", "Error stopping mediaPlayer", e)
+                    } finally {
+                        mediaPlayer?.release()
+                        mediaPlayer = null
+                        currentTrackUri.value = null
+                        currentTrackName.value = null
+                        isMusicPlaying.value = false
+                    }
+
+                    TimerWidgetProvider.updateWidget(this)
+                    stopSelf()
+                }
             }
             ACTION_NEXT_TRACK -> {
                 when (PlaylistPreferences.musicSourceMode.value) {
@@ -844,24 +1234,22 @@ class TimerService : Service() {
     private fun startTimerCoroutine() {
         timerJob?.cancel()
         timerJob = serviceScope.launch {
-            while (isRunning.value) {
+            while (anyModeRunning()) {
                 delay(1000)
-                if (!isRunning.value) break
+                if (!anyModeRunning()) break
 
                 val now = System.currentTimeMillis()
-                val elapsed = computeElapsedSeconds(now)
-                elapsedSeconds.value = elapsed
+                syncActiveModeFlows(now)
 
-                val currentMode = activeMode.value
-                val target = targetDuration.value
-
-                // Mode completion checks
-                if (currentMode == "COUNTDOWN" && target > 0L && elapsed >= target) {
+                // Check completion for COUNTDOWN and POMODORO even if another mode tab is currently viewed
+                val countdownState = getModeState("COUNTDOWN")
+                if (countdownState.isRunning && countdownState.targetDuration > 0L && countdownState.computeElapsedSeconds(now) >= countdownState.targetDuration) {
                     handleCountdownComplete(now)
-                    break
-                } else if (currentMode == "POMODORO" && target > 0L && elapsed >= target) {
+                }
+
+                val pomodoroState = getModeState("POMODORO")
+                if (pomodoroState.isRunning && pomodoroState.targetDuration > 0L && pomodoroState.computeElapsedSeconds(now) >= pomodoroState.targetDuration) {
                     handlePomodoroComplete(now)
-                    break
                 }
 
                 val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -873,12 +1261,13 @@ class TimerService : Service() {
     }
 
     private fun handleCountdownComplete(now: Long) {
-        val target = targetDuration.value
-        val phaseKey = "COUNTDOWN|focus|1|$startedAtMillis"
+        val state = getModeState("COUNTDOWN")
+        val target = state.targetDuration
+        val phaseKey = "COUNTDOWN|focus|1|${state.startedAtMillis}"
         if (lastCompletedPhaseKey != phaseKey) {
             lastCompletedPhaseKey = phaseKey
-            val completedAt = if (startedAtMillis > 0L) {
-                startedAtMillis + (target - baseElapsedSeconds) * 1000L
+            val completedAt = if (state.startedAtMillis > 0L) {
+                state.startedAtMillis + (target - state.baseElapsedSeconds) * 1000L
             } else {
                 now
             }
@@ -894,11 +1283,14 @@ class TimerService : Service() {
             savePendingSession(this, session)
         }
 
-        isRunning.value = false
-        isPaused.value = false
-        elapsedSeconds.value = target
-        baseElapsedSeconds = target
-        startedAtMillis = 0L
+        val updated = state.copy(
+            baseElapsedSeconds = target,
+            startedAtMillis = 0L,
+            isRunning = false,
+            isPaused = false
+        )
+        modeStates.value = modeStates.value + ("COUNTDOWN" to updated)
+        syncActiveModeFlows(now)
 
         saveTimerState(this)
         TimerWidgetProvider.updateWidget(this)
@@ -907,17 +1299,18 @@ class TimerService : Service() {
     }
 
     private fun handlePomodoroComplete(now: Long) {
-        val target = targetDuration.value
-        val isBreak = isPomodoroBreak.value
-        val round = pomodoroRound.value
+        val state = getModeState("POMODORO")
+        val target = state.targetDuration
+        val isBreak = state.isPomodoroBreak
+        val round = state.pomodoroRound
 
-        if (!isBreak) {
+        val updated = if (!isBreak) {
             // Focus complete: create pending session ONLY for focus completion!
-            val phaseKey = "POMODORO|focus|$round|$startedAtMillis"
+            val phaseKey = "POMODORO|focus|$round|${state.startedAtMillis}"
             if (lastCompletedPhaseKey != phaseKey) {
                 lastCompletedPhaseKey = phaseKey
-                val completedAt = if (startedAtMillis > 0L) {
-                    startedAtMillis + (target - baseElapsedSeconds) * 1000L
+                val completedAt = if (state.startedAtMillis > 0L) {
+                    state.startedAtMillis + (target - state.baseElapsedSeconds) * 1000L
                 } else {
                     now
                 }
@@ -934,25 +1327,30 @@ class TimerService : Service() {
             }
 
             // Transition to break
-            isPomodoroBreak.value = true
-            targetDuration.value = if (round < 4) 5 * 60L else 15 * 60L
-            elapsedSeconds.value = 0L
-            baseElapsedSeconds = 0L
-            startedAtMillis = 0L
-            isRunning.value = false
-            isPaused.value = false
+            state.copy(
+                targetDuration = if (round < 4) 5 * 60L else 15 * 60L,
+                baseElapsedSeconds = 0L,
+                startedAtMillis = 0L,
+                isRunning = false,
+                isPaused = false,
+                isPomodoroBreak = true
+            )
         } else {
             // Break complete: NO pending session created!
             // Transition to next focus round
-            isPomodoroBreak.value = false
-            pomodoroRound.value = if (round >= 4) 1 else round + 1
-            targetDuration.value = 25 * 60L
-            elapsedSeconds.value = 0L
-            baseElapsedSeconds = 0L
-            startedAtMillis = 0L
-            isRunning.value = false
-            isPaused.value = false
+            state.copy(
+                targetDuration = 25 * 60L,
+                baseElapsedSeconds = 0L,
+                startedAtMillis = 0L,
+                isRunning = false,
+                isPaused = false,
+                pomodoroRound = if (round >= 4) 1 else round + 1,
+                isPomodoroBreak = false
+            )
         }
+
+        modeStates.value = modeStates.value + ("POMODORO" to updated)
+        syncActiveModeFlows(now)
 
         saveTimerState(this)
         TimerWidgetProvider.updateWidget(this)
@@ -978,38 +1376,13 @@ class TimerService : Service() {
     }
 
     private fun buildNotification(): Notification {
+        val now = System.currentTimeMillis()
+        val displayState = getDisplayModeState(now)
         val habitName = activeHabitName.value ?: "Focus Session"
-        val seconds = elapsedSeconds.value
-        val mode = activeMode.value
-        val target = targetDuration.value
+        val modeBadge = formatModeBadge(displayState)
+        val timeStr = "$modeBadge ${formatModeTime(displayState, now)}"
 
-        val timeStr = when (mode) {
-            "COUNTDOWN" -> {
-                val rem = (target - seconds).coerceAtLeast(0L)
-                val m = rem / 60
-                val s = rem % 60
-                String.format("%02d:%02d", m, s)
-            }
-            "POMODORO" -> {
-                val rem = (target - seconds).coerceAtLeast(0L)
-                val m = rem / 60
-                val s = rem % 60
-                val phase = if (isPomodoroBreak.value) "Break" else "Focus"
-                "$phase " + String.format("%02d:%02d", m, s)
-            }
-            else -> {
-                val hours = seconds / 3600
-                val minutes = (seconds % 3600) / 60
-                val secs = seconds % 60
-                if (hours > 0) {
-                    String.format("%02d:%02d:%02d", hours, minutes, secs)
-                } else {
-                    String.format("%02d:%02d", minutes, secs)
-                }
-            }
-        }
-
-        val statusText = if (isPaused.value) "Paused" else if (isRunning.value) "Running" else "Ready"
+        val statusText = if (displayState.isPaused) "Paused" else if (displayState.isRunning) "Running" else "Ready"
         val musicMode = PlaylistPreferences.musicSourceMode.value
         val trackText = when (musicMode) {
             MusicSourceMode.EXTERNAL -> "🎵 YouTube Music"
@@ -1026,13 +1399,13 @@ class TimerService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val pauseResumeAction = if (isPaused.value) {
+        val pauseResumeAction = if (displayState.isPaused) {
             val resumeIntent = Intent(this, TimerService::class.java).apply {
                 action = ACTION_START
                 putExtra(EXTRA_HABIT_ID, activeHabitId.value)
                 putExtra(EXTRA_HABIT_NAME, activeHabitName.value)
-                putExtra(EXTRA_TIMER_MODE, activeMode.value)
-                putExtra(EXTRA_TARGET_SECONDS, targetDuration.value)
+                putExtra(EXTRA_TIMER_MODE, displayState.mode)
+                putExtra(EXTRA_TARGET_SECONDS, displayState.targetDuration)
             }
             val resumePending = PendingIntent.getService(
                 this, 101, resumeIntent,
@@ -1046,6 +1419,7 @@ class TimerService : Service() {
         } else {
             val pauseIntent = Intent(this, TimerService::class.java).apply {
                 action = ACTION_PAUSE
+                putExtra(EXTRA_TIMER_MODE, displayState.mode)
             }
             val pausePending = PendingIntent.getService(
                 this, 102, pauseIntent,
@@ -1060,6 +1434,8 @@ class TimerService : Service() {
 
         val stopIntent = Intent(this, TimerService::class.java).apply {
             action = ACTION_STOP
+            putExtra(EXTRA_TIMER_MODE, displayState.mode)
+            putExtra(EXTRA_SAVE_SESSION, true)
         }
         val stopPending = PendingIntent.getService(
             this, 103, stopIntent,
@@ -1084,11 +1460,11 @@ class TimerService : Service() {
         val musicActionTitle = if (isMusicPlaying.value) "Pause Music" else "Play Music"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Focus: $habitName")
+            .setContentTitle("Focus: $habitName ($modeBadge)")
             .setContentText(contentText)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentIntent(pendingIntent)
-            .setOngoing(isRunning.value)
+            .setOngoing(anyModeRunning())
             .addAction(pauseResumeAction)
             .addAction(stopAction)
             .addAction(android.R.drawable.ic_media_previous, "Prev", prevPending)

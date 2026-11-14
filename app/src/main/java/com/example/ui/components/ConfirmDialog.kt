@@ -28,12 +28,15 @@ fun ConfirmDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        GlassCard(
+        ConfigureDialogWindowBlur()
+        Surface(
             modifier = Modifier
                 .widthIn(max = 340.dp)
                 .fillMaxWidth()
                 .padding(20.dp),
-            shape = RoundedCornerShape(24.dp)
+            shape = RoundedCornerShape(24.dp),
+            color = frostedDialogContainerColor(),
+            border = BorderStroke(1.dp, AppTheme.colors.border)
         ) {
             Column(modifier = Modifier.padding(24.dp)) {
                 Text(

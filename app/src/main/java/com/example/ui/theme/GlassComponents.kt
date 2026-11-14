@@ -517,3 +517,51 @@ fun GlassProgressBar(
         )
     }
 }
+
+/**
+ * Returns a strongly frosted, high-opacity surface color for modal dialogs so background
+ * elements (such as the timer ring or buttons) do not bleed through and reduce legibility.
+ * Uses ~90-92% opacity on Android 12+ (where window blur is active) and ~96-97% on API 24-30.
+ */
+@Composable
+fun frostedDialogContainerColor(): Color {
+    val colors = AppTheme.colors
+    val isBlurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val alpha = if (isBlurSupported) 0.90f else 0.96f
+    return when {
+        colors.isGlassEnabled -> SurfaceDark.copy(alpha = alpha)
+        colors.isDark -> colors.surface.copy(alpha = alpha)
+        else -> colors.surface.copy(alpha = if (isBlurSupported) 0.92f else 0.97f)
+    }
+}
+
+/**
+ * Configures heavy window-level background blur and blur-behind on Android 12+ (API 31+),
+ * with a darker scrim fallback on API 24-30.
+ */
+@Composable
+fun ConfigureDialogWindowBlur(
+    blurBehindRadiusPx: Int = 64,
+    backgroundBlurRadiusPx: Int = 80
+) {
+    val view = androidx.compose.ui.platform.LocalView.current
+    SideEffect {
+        val dialogWindowProvider = view.parent as? androidx.compose.ui.window.DialogWindowProvider
+        val window = dialogWindowProvider?.window ?: return@SideEffect
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            window.attributes = window.attributes.apply {
+                blurBehindRadius = blurBehindRadiusPx
+                dimAmount = 0.62f
+            }
+            try {
+                window.setBackgroundBlurRadius(backgroundBlurRadiusPx)
+            } catch (_: Exception) {}
+        } else {
+            window.attributes = window.attributes.apply {
+                dimAmount = 0.75f
+            }
+        }
+    }
+}

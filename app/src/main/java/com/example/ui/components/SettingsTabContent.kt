@@ -916,20 +916,16 @@ fun SettingsTabContent(
             shape = RoundedCornerShape(24.dp)
         ) {
             Row(
-                modifier = Modifier.padding(18.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column {
-                    Text(
-                        text = "Habit Ledger",
-                        style = Typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = AppTheme.colors.text)
-                    )
-                    Text(
-                        text = "Consistency, Measured · Built with Jetpack Compose & Material 3",
-                        style = Typography.labelSmall.copy(color = AppTheme.colors.textFaint, fontSize = 11.sp)
-                    )
-                }
+                Text(
+                    text = "Habit Ledger",
+                    style = Typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = AppTheme.colors.text)
+                )
                 Surface(
                     shape = RoundedCornerShape(20.dp),
                     color = AppTheme.colors.surface3,
