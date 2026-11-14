@@ -11,7 +11,7 @@ on:
       tag_name:
         description: 'Release tag name (when triggered manually)'
         required: false
-        default: 'v1.1.0'
+        default: 'v1.2.0'
 
 permissions:
   contents: write
@@ -32,15 +32,16 @@ jobs:
         run: |
           tar -xzf patch-bundle.tar.gz
           rm -f patch-bundle.tar.gz
+          rm -f .env.example
           sed -i 's/\r$//' ./gradlew
           chmod +x ./gradlew
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -m "feat: production audit fixes, UI/UX polish, security hardening, and unit tests" || true
+          git commit -m "fix: offline cleanup, per-mode timer state, frosted dialog blur, and footer cleanup" || true
           git push origin HEAD:main
-          git tag -f v1.1.0
-          git push origin v1.1.0 --force
+          git tag -f v1.2.0
+          git push origin v1.2.0 --force
 
       - name: Set up JDK 17 & 21
         uses: actions/setup-java@v4
@@ -61,9 +62,7 @@ jobs:
 
       - name: Prepare Environment File for Secrets Plugin
         run: |
-          if [ ! -f .env ] && [ -f .env.example ]; then
-            cp .env.example .env
-          fi
+          touch .env
 
       - name: Run Unit Tests & Build Debug + Release APKs
         run: |
@@ -79,7 +78,7 @@ jobs:
           elif [ -n "${{ github.event.inputs.tag_name }}" ]; then
             VERSION_LABEL="${{ github.event.inputs.tag_name }}"
           else
-            VERSION_LABEL="v1.1.0"
+            VERSION_LABEL="v1.2.0"
           fi
           APK_NAME="RudeusHabit-${VERSION_LABEL}.apk"
           RELEASE_APK_NAME="RudeusHabit-${VERSION_LABEL}-release.apk"
